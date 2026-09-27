@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"container/list"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -32,8 +33,21 @@ type MitmCA struct {
 	tlsCert tls.Certificate
 	pem     []byte
 
-	mu    sync.Mutex
-	leafs map[string]*tls.Certificate
+	mu       sync.Mutex
+	leafs    map[string]*list.Element
+	lru      *list.List
+	inFlight map[string]*leafCall
+}
+
+type cachedLeaf struct {
+	host string
+	cert *tls.Certificate
+}
+
+type leafCall struct {
+	done chan struct{}
+	cert *tls.Certificate
+	err  error
 }
 
 // GenerateMitmCA creates a new ephemeral CA.
@@ -78,11 +92,13 @@ func GenerateMitmCA() (*MitmCA, error) {
 		return nil, err
 	}
 	return &MitmCA{
-		cert:    cert,
-		key:     key,
-		tlsCert: tlsCert,
-		pem:     certPEM,
-		leafs:   make(map[string]*tls.Certificate),
+		cert:     cert,
+		key:      key,
+		tlsCert:  tlsCert,
+		pem:      certPEM,
+		leafs:    make(map[string]*list.Element),
+		lru:      list.New(),
+		inFlight: make(map[string]*leafCall),
 	}, nil
 }
 
@@ -142,19 +158,39 @@ func (c *MitmCA) Leaf(hostname string) (*tls.Certificate, error) {
 		return nil, fmt.Errorf("mitm: empty hostname")
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if leaf, ok := c.leafs[host]; ok && leaf.Leaf != nil && time.Until(leaf.Leaf.NotAfter) > leafRenewBefore {
-		return leaf, nil
+	if element, ok := c.leafs[host]; ok {
+		leaf := element.Value.(cachedLeaf).cert
+		if leaf.Leaf != nil && time.Until(leaf.Leaf.NotAfter) > leafRenewBefore {
+			c.lru.MoveToFront(element)
+			c.mu.Unlock()
+			return leaf, nil
+		}
+		c.lru.Remove(element)
+		delete(c.leafs, host)
 	}
+	if call := c.inFlight[host]; call != nil {
+		c.mu.Unlock()
+		<-call.done
+		return call.cert, call.err
+	}
+	call := &leafCall{done: make(chan struct{})}
+	c.inFlight[host] = call
+	c.mu.Unlock()
 	leaf, err := c.generateLeaf(host)
-	if err != nil {
-		return nil, err
+	c.mu.Lock()
+	if err == nil {
+		if c.lru.Len() >= maxCachedLeafs {
+			oldest := c.lru.Back()
+			delete(c.leafs, oldest.Value.(cachedLeaf).host)
+			c.lru.Remove(oldest)
+		}
+		c.leafs[host] = c.lru.PushFront(cachedLeaf{host: host, cert: leaf})
 	}
-	if len(c.leafs) >= maxCachedLeafs {
-		c.leafs = make(map[string]*tls.Certificate)
-	}
-	c.leafs[host] = leaf
-	return leaf, nil
+	call.cert, call.err = leaf, err
+	delete(c.inFlight, host)
+	close(call.done)
+	c.mu.Unlock()
+	return leaf, err
 }
 
 func (c *MitmCA) generateLeaf(hostname string) (*tls.Certificate, error) {

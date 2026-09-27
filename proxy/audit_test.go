@@ -58,3 +58,16 @@ func TestFormatOCSF_AuditMode(t *testing.T) {
 		t.Fatalf("audit mode=%q", line)
 	}
 }
+
+func TestFormatOCSFRedactsPathAndReason(t *testing.T) {
+	line := formatOCSF(auditEvent{
+		TS: "t", Action: "deny", Host: "example.com", Port: 443,
+		Method: "GET", Path: "/search?q=private-value", Reason: "authorization=secret-value",
+	})
+	if strings.Contains(line, "private-value") || strings.Contains(line, "secret-value") {
+		t.Fatalf("audit leaked secret: %s", line)
+	}
+	if !strings.Contains(line, "/search?[REDACTED]") {
+		t.Fatalf("audit lost useful path: %s", line)
+	}
+}

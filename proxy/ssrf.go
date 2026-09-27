@@ -14,16 +14,26 @@ import (
 	"time"
 )
 
-// Always-blocked ranges (SSRF): loopback + link-local. Never allowed via allowed_ips.
+// Always-blocked ranges (SSRF): never allowed, not even via allowed_ips.
+// allowLoopback bypasses only 127.0.0.0/8 + ::1/128 for tests; everything
+// else below stays blocked unconditionally.
 var (
-	cidrLoopback4  = mustCIDR("127.0.0.0/8")
-	cidrLoopback6  = mustCIDR("::1/128")
-	cidrLinkLocal4 = mustCIDR("169.254.0.0/16")
-	cidrLinkLocal6 = mustCIDR("fe80::/10")
-	cidrPrivate10  = mustCIDR("10.0.0.0/8")
-	cidrPrivate172 = mustCIDR("172.16.0.0/12")
-	cidrPrivate192 = mustCIDR("192.168.0.0/16")
-	cidrULA        = mustCIDR("fc00::/7")
+	cidrLoopback4   = mustCIDR("127.0.0.0/8")
+	cidrLoopback6   = mustCIDR("::1/128")
+	cidrLinkLocal4  = mustCIDR("169.254.0.0/16")
+	cidrLinkLocal6  = mustCIDR("fe80::/10")
+	cidrUnspecified = mustCIDR("0.0.0.0/8")
+	cidrCGNAT       = mustCIDR("100.64.0.0/10")
+	cidrIETF1       = mustCIDR("192.0.0.0/24")
+	cidrBench       = mustCIDR("198.18.0.0/15")
+	cidrMulticast4  = mustCIDR("224.0.0.0/4")
+	cidrUnspec6     = mustCIDR("::/128")
+	cidrMapped4     = mustCIDR("::ffff:0:0/96")
+	cidrMulticast6  = mustCIDR("ff00::/8")
+	cidrPrivate10   = mustCIDR("10.0.0.0/8")
+	cidrPrivate172  = mustCIDR("172.16.0.0/12")
+	cidrPrivate192  = mustCIDR("192.168.0.0/16")
+	cidrULA         = mustCIDR("fc00::/7")
 )
 
 func mustCIDR(s string) netip.Prefix {
@@ -37,7 +47,18 @@ func mustCIDR(s string) netip.Prefix {
 // SSRFOptions controls destination IP checks before dial.
 type SSRFOptions struct {
 	AllowedIPs    []string
-	AllowLoopback bool // tests / explicit local backends only
+	allowLoopback bool // test-only; never set by production callers
+	// LookupIPAddr overrides DNS resolution (tests inject a fake resolver to
+	// simulate DNS rebinding). Nil means net.DefaultResolver.
+	LookupIPAddr func(ctx context.Context, host string) ([]net.IPAddr, error)
+}
+
+// lookupIP resolves host to IPs, honoring opts.LookupIPAddr when set.
+func lookupIP(ctx context.Context, host string, opts SSRFOptions) ([]net.IPAddr, error) {
+	if opts.LookupIPAddr != nil {
+		return opts.LookupIPAddr(ctx, host)
+	}
+	return net.DefaultResolver.LookupIPAddr(ctx, host)
 }
 
 // ResolveAndFilter returns dialable IPs for host after SSRF checks.
@@ -46,7 +67,7 @@ func ResolveAndFilter(ctx context.Context, host string, opts SSRFOptions) ([]net
 	if ip, err := netip.ParseAddr(host); err == nil {
 		addrs = []netip.Addr{ip}
 	} else {
-		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		ips, err := lookupIP(ctx, host, opts)
 		if err != nil {
 			return nil, fmt.Errorf("ssrf resolve %q: %w", host, err)
 		}
@@ -69,11 +90,14 @@ func ResolveAndFilter(ctx context.Context, host string, opts SSRFOptions) ([]net
 
 	var out []netip.Addr
 	for _, addr := range addrs {
-		if alwaysBlocked(addr) && !opts.AllowLoopback {
+		if isLoopback(addr) {
+			if !opts.allowLoopback {
+				continue
+			}
+			out = append(out, addr)
 			continue
 		}
-		if alwaysBlocked(addr) && opts.AllowLoopback {
-			out = append(out, addr)
+		if alwaysBlocked(addr) {
 			continue
 		}
 		priv := isPrivate(addr)
@@ -95,20 +119,23 @@ func ResolveAndFilter(ctx context.Context, host string, opts SSRFOptions) ([]net
 	return out, nil
 }
 
-// DialSSRF resolves host, applies SSRF filters, then dials.
-// When HTTP_PROXY/HTTPS_PROXY is set, opens a CONNECT tunnel through the corp proxy
-// to host:port (after SSRF still passes on the destination).
+// DialSSRF resolves host once, applies SSRF filters, then dials only the
+// filtered addresses (no second lookup — DNS-rebinding TOCTOU safe).
+// When HTTP_PROXY/HTTPS_PROXY is set, opens a CONNECT tunnel through the corp
+// proxy to host:port. The corp proxy is a trusted boundary: it sees the raw
+// target, so combining it with policy AllowedIPs is fail-closed (refused) and
+// the dial is audit-logged as via-proxy.
 func DialSSRF(ctx context.Context, host, port string, opts SSRFOptions) (net.Conn, error) {
-	if _, err := ResolveAndFilter(ctx, host, opts); err != nil {
+	addrs, err := ResolveAndFilter(ctx, host, opts)
+	if err != nil {
 		return nil, err
 	}
 	target := net.JoinHostPort(host, port)
 	if proxyURL := upstreamProxyURL(host); proxyURL != nil {
+		if len(opts.AllowedIPs) > 0 {
+			return nil, fmt.Errorf("ssrf: refusing proxy dial to %q with allowed_ips set (corp proxy is a trusted boundary, filtering would be advisory)", host)
+		}
 		return dialViaHTTPProxy(ctx, proxyURL, target)
-	}
-	addrs, err := ResolveAndFilter(ctx, host, opts)
-	if err != nil {
-		return nil, err
 	}
 	var last error
 	d := net.Dialer{Timeout: 15 * time.Second}
@@ -232,7 +259,17 @@ func parseAllowNets(cidrs []string) ([]netip.Prefix, error) {
 func alwaysBlocked(addr netip.Addr) bool {
 	addr = addr.Unmap()
 	return cidrLoopback4.Contains(addr) || cidrLoopback6.Contains(addr) ||
-		cidrLinkLocal4.Contains(addr) || cidrLinkLocal6.Contains(addr)
+		cidrLinkLocal4.Contains(addr) || cidrLinkLocal6.Contains(addr) ||
+		cidrUnspecified.Contains(addr) || cidrCGNAT.Contains(addr) ||
+		cidrIETF1.Contains(addr) || cidrBench.Contains(addr) ||
+		cidrMulticast4.Contains(addr) || cidrUnspec6.Contains(addr) ||
+		cidrMapped4.Contains(addr) || cidrMulticast6.Contains(addr)
+}
+
+// isLoopback reports loopback only (the single range test-only bypasses).
+func isLoopback(addr netip.Addr) bool {
+	addr = addr.Unmap()
+	return cidrLoopback4.Contains(addr) || cidrLoopback6.Contains(addr)
 }
 
 func isPrivate(addr netip.Addr) bool {
