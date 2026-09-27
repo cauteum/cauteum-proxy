@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"strings"
@@ -19,11 +20,9 @@ func (s *Server) WatchPolicy(ctx context.Context, path string, interval time.Dur
 	if interval <= 0 {
 		interval = time.Second
 	}
-	var lastMod time.Time
-	var lastSize int64
-	if fi, err := os.Stat(path); err == nil {
-		lastMod = fi.ModTime()
-		lastSize = fi.Size()
+	var lastHash [32]byte
+	if raw, err := os.ReadFile(path); err == nil {
+		lastHash = sha256.Sum256(raw)
 	}
 	t := time.NewTicker(interval)
 	defer t.Stop()
@@ -32,16 +31,15 @@ func (s *Server) WatchPolicy(ctx context.Context, path string, interval time.Dur
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			fi, err := os.Stat(path)
+			raw, err := os.ReadFile(path)
 			if err != nil {
 				continue
 			}
-			if fi.ModTime().Equal(lastMod) && fi.Size() == lastSize {
+			hash := sha256.Sum256(raw)
+			if hash == lastHash {
 				continue
 			}
-			lastMod = fi.ModTime()
-			lastSize = fi.Size()
-			doc, err := policy.Load(path)
+			doc, err := policy.Parse(raw)
 			if err != nil {
 				s.logAudit(auditEvent{Action: "error", Reason: "policy reload: " + err.Error(), Allow: false})
 				continue
@@ -50,6 +48,7 @@ func (s *Server) WatchPolicy(ctx context.Context, path string, interval time.Dur
 				s.logAudit(auditEvent{Action: "error", Reason: "policy apply: " + err.Error(), Allow: false})
 				continue
 			}
+			lastHash = hash
 			s.logAudit(auditEvent{Action: "reload", Reason: fmt.Sprintf("policy reloaded from %s", path), Allow: true})
 		}
 	}

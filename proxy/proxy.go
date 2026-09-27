@@ -38,7 +38,7 @@ type Server struct {
 	ca            *MitmCA
 	secrets       SecretStore
 	Middleware    *middleware.Pipeline
-	AllowLoopback bool // when true, SSRF permits 127.0.0.0/8 (tests)
+	allowLoopback bool // test-only: SSRF permits 127.0.0.0/8 + ::1. See NewServerForTests.
 	// UpstreamTLS overrides the TLS client config used when dialing real backends after terminate.
 	// Tests may set InsecureSkipVerify; production leaves this nil (system roots).
 	UpstreamTLS *tls.Config
@@ -221,7 +221,7 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.RLock()
 	eng := s.eng
-	allowLoop := s.AllowLoopback
+	allowLoop := s.allowLoopback
 	secrets := s.secrets
 	s.mu.RUnlock()
 	if eng == nil {
@@ -300,7 +300,7 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 	if dec.Matched != nil {
 		allowedIPs = dec.Matched.AllowedIPs
 	}
-	backend, err := DialSSRF(r.Context(), host, portStr, SSRFOptions{AllowedIPs: allowedIPs, AllowLoopback: allowLoop})
+	backend, err := DialSSRF(r.Context(), host, portStr, SSRFOptions{AllowedIPs: allowedIPs, allowLoopback: allowLoop})
 	if err != nil {
 		http.Error(w, "dial failed", http.StatusBadGateway)
 		s.logAudit(auditEvent{Action: "dial_error", Host: host, Port: port, Reason: err.Error(), Allow: true})

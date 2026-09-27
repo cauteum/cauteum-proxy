@@ -25,6 +25,10 @@ network_policies:
 	if err := os.WriteFile(path, body1, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	initialInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	doc, err := policy.Load(path)
 	if err != nil {
 		t.Fatal(err)
@@ -55,6 +59,12 @@ network_policies:
 		t.Fatal(err)
 	}
 	_ = f.Close()
+	if len(body1) != len(body2) {
+		t.Fatal("test requires equal-length policies")
+	}
+	if err := os.Chtimes(path, initialInfo.ModTime(), initialInfo.ModTime()); err != nil {
+		t.Fatal(err)
+	}
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {

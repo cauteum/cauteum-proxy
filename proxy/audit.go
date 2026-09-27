@@ -4,19 +4,22 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/whaleshell/slogx"
 )
 
 // auditEvent is an internal security / lifecycle decision from the proxy.
 type auditEvent struct {
-	TS     string
-	Action string // allow | deny | audit | reject | error | dial_error | reload
-	Host   string
-	Port   int
-	Method string
-	Path   string
-	Binary string
-	Allow  bool
-	Reason string
+	TS       string
+	Action   string // allow | deny | audit | reject | error | dial_error | reload
+	Host     string
+	Port     int
+	Method   string
+	Path     string
+	Binary   string
+	Allow    bool
+	Reason   string
+	ViaProxy bool // dial went through the corp upstream proxy (trusted boundary)
 }
 
 func (s *Server) logAudit(ev auditEvent) {
@@ -34,6 +37,8 @@ func (s *Server) logAudit(ev auditEvent) {
 // formatOCSF renders NVIDIA OpenShell–compatible OCSF shorthand for agent observation.
 // Pattern: <ts> OCSF CLASS:ACTIVITY [SEVERITY] ACTION DETAILS [CONTEXT]
 func formatOCSF(ev auditEvent) string {
+	ev.Path = slogx.RedactAuditText(ev.Path)
+	ev.Reason = slogx.RedactAuditText(ev.Reason)
 	class, activity := ocsfClassActivity(ev)
 	sev := ocsfSeverity(ev)
 	action := ocsfAction(ev)

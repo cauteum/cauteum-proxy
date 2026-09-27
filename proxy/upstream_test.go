@@ -1,4 +1,4 @@
-package proxy_test
+package proxy
 
 import (
 	"bufio"
@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/whaleshell/whaleshell-proxy/proxy"
 )
 
 func TestDialViaUpstreamProxy(t *testing.T) {
@@ -61,7 +59,7 @@ func TestDialViaUpstreamProxy(t *testing.T) {
 	t.Setenv("HTTPS_PROXY", "http://"+pln.Addr().String())
 	t.Setenv("NO_PROXY", "")
 
-	conn, err := proxy.DialSSRF(context.Background(), "127.0.0.1", bport, proxy.SSRFOptions{AllowLoopback: true})
+	conn, err := DialSSRF(context.Background(), "127.0.0.1", bport, SSRFOptions{allowLoopback: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,5 +69,25 @@ func TestDialViaUpstreamProxy(t *testing.T) {
 	n, _ := conn.Read(buf)
 	if !strings.Contains(string(buf[:n]), "upstream-ok") {
 		t.Fatalf("got %q", buf[:n])
+	}
+}
+
+func TestDialViaUpstreamProxyRejectsAllowedIPs(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
+		t.Setenv(key, "http://"+listener.Addr().String())
+	}
+	t.Setenv("NO_PROXY", "")
+	t.Setenv("no_proxy", "")
+	_, err = DialSSRF(context.Background(), "127.0.0.1", "443", SSRFOptions{
+		allowLoopback: true,
+		AllowedIPs:    []string{"127.0.0.0/8"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "refusing proxy dial") {
+		t.Fatalf("expected fail-closed proxy route, got %v", err)
 	}
 }

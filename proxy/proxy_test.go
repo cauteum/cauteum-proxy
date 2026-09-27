@@ -43,8 +43,7 @@ func TestCONNECTAllowDeny(t *testing.T) {
 	if err := eng.Apply(doc); err != nil {
 		t.Fatal(err)
 	}
-	srv := proxy.NewServer(&eng, io.Discard)
-	srv.AllowLoopback = true
+	srv := proxy.NewServerForTests(&eng, io.Discard)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -128,8 +127,7 @@ func TestAbsoluteFormL7(t *testing.T) {
 	if err := eng.Apply(doc); err != nil {
 		t.Fatal(err)
 	}
-	srv := proxy.NewServer(&eng, io.Discard)
-	srv.AllowLoopback = true
+	srv := proxy.NewServerForTests(&eng, io.Discard)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -199,8 +197,7 @@ func TestTLSTerminateL7(t *testing.T) {
 	if err := eng.Apply(doc); err != nil {
 		t.Fatal(err)
 	}
-	srv := proxy.NewServer(&eng, io.Discard)
-	srv.AllowLoopback = true
+	srv := proxy.NewServerForTests(&eng, io.Discard)
 	srv.UpstreamTLS = &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"http/1.1"}}
 	ca := srv.CA()
 	if ca == nil {

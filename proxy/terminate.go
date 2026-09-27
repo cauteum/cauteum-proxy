@@ -33,7 +33,7 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.RLock()
 	eng := s.eng
-	allowLoop := s.AllowLoopback
+	allowLoop := s.allowLoopback
 	ca := s.ca
 	s.mu.RUnlock()
 	if eng == nil {
@@ -108,7 +108,7 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	backend, err := DialSSRF(r.Context(), host, portStr, SSRFOptions{AllowedIPs: allowedIPs, AllowLoopback: allowLoop})
+	backend, err := DialSSRF(r.Context(), host, portStr, SSRFOptions{AllowedIPs: allowedIPs, allowLoopback: allowLoop})
 	if err != nil {
 		http.Error(w, "dial failed", http.StatusBadGateway)
 		s.logAudit(auditEvent{Action: "dial_error", Host: host, Port: port, Reason: err.Error(), Allow: true})
