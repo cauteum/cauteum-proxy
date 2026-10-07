@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/netip"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -90,10 +89,10 @@ func TestDialSSRFNoProxyUsesExactHostAndPort(t *testing.T) {
 	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
 		t.Setenv(key, "http://"+proxy.Addr().String())
 	}
+	// Set the lowercase spelling first: Windows treats both names as the same
+	// variable, while Unix keeps them distinct.
+	t.Setenv("no_proxy", "")
 	t.Setenv("NO_PROXY", "127.0.0.1:"+targetPort)
-	if runtime.GOOS != "windows" {
-		t.Setenv("no_proxy", "")
-	}
 	conn, err := DialSSRF(context.Background(), "127.0.0.1", targetPort, SSRFOptions{allowLoopback: true})
 	if err != nil {
 		t.Fatal(err)

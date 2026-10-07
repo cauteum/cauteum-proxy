@@ -15,7 +15,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -142,10 +141,7 @@ func (s *tokenGrantWorkloadAPIServer) FetchJWTBundles(_ *workload.JWTBundlesRequ
 	return stream.Context().Err()
 }
 
-func TestSPIFFETokenGrantResolverUsesWorkloadSVIDAndRefreshesAfterExpiry(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the SPIFFE Workload API client uses a named pipe on Windows, not a Unix socket")
-	}
+func testSPIFFETokenGrantResolverUsesWorkloadSVIDAndRefreshesAfterExpiry(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
