@@ -1,11 +1,15 @@
 package proxy
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/whaleshell/whaleshell-core/env"
 )
@@ -160,11 +164,21 @@ func ContainsPlaceholder(s string) bool {
 // RewriteHTTPRequest resolves placeholders in path, query, and headers (incl. Basic).
 // Fail-closed: unresolved markers return an error (do not send upstream).
 func RewriteHTTPRequest(req *http.Request, secrets SecretStore) error {
+	return RewriteHTTPRequestWithOptions(req, secrets, false)
+}
+
+// RewriteHTTPRequestWithOptions optionally rewrites textual REST body markers.
+// Body rewriting is explicitly opt-in per endpoint, matching OpenShell policy.
+func RewriteHTTPRequestWithOptions(req *http.Request, secrets SecretStore, rewriteBody bool) error {
 	if req == nil {
 		return nil
 	}
 	if req.URL != nil {
-		path, err := rewritePath(req.URL.EscapedPath(), secrets)
+		escapedPath := req.URL.EscapedPath()
+		marker := string(encodedSlash)
+		protectedPath := strings.ReplaceAll(escapedPath, "%2F", marker)
+		protectedPath = strings.ReplaceAll(protectedPath, "%2f", marker)
+		path, err := rewritePath(protectedPath, secrets)
 		if err != nil {
 			return err
 		}
@@ -172,8 +186,15 @@ func RewriteHTTPRequest(req *http.Request, secrets SecretStore) error {
 		if err != nil {
 			return err
 		}
-		req.URL.Path = path
-		req.URL.RawPath = ""
+		if path != protectedPath {
+			if strings.Contains(path, marker) {
+				req.URL.Path = strings.ReplaceAll(path, marker, "/")
+				req.URL.RawPath = strings.ReplaceAll(path, marker, "%2F")
+			} else {
+				req.URL.Path = path
+				req.URL.RawPath = ""
+			}
+		}
 		req.URL.RawQuery = rawQuery
 	}
 	for k, vv := range req.Header {
@@ -188,7 +209,99 @@ func RewriteHTTPRequest(req *http.Request, secrets SecretStore) error {
 		}
 		req.Header[k] = vv
 	}
+	if rewriteBody {
+		if err := rewriteRequestBody(req, secrets); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+const maxCredentialRewriteBodyBytes = 256 << 10
+
+func rewriteRequestBody(req *http.Request, secrets SecretStore) error {
+	if req.Body == nil || req.Body == http.NoBody {
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(req.Body, maxCredentialRewriteBodyBytes+1))
+	closeErr := req.Body.Close()
+	if err != nil {
+		return fmt.Errorf("request body credential rewrite: %w", err)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("request body credential rewrite: %w", closeErr)
+	}
+	if len(body) > maxCredentialRewriteBodyBytes {
+		return fmt.Errorf("request body credential rewrite exceeds %d bytes", maxCredentialRewriteBodyBytes)
+	}
+	mediaType, _, _ := mime.ParseMediaType(req.Header.Get("Content-Type"))
+	mediaType = strings.ToLower(mediaType)
+	textual := strings.HasPrefix(mediaType, "text/") || mediaType == "application/json" || mediaType == "application/x-www-form-urlencoded"
+	if !textual {
+		if ContainsPlaceholder(string(body)) {
+			req.Body = io.NopCloser(bytes.NewReader(body))
+			req.ContentLength = int64(len(body))
+			return fmt.Errorf("request body credential rewrite requires a supported textual content type")
+		}
+		req.Body = io.NopCloser(bytes.NewReader(body))
+		req.ContentLength = int64(len(body))
+		return nil
+	}
+	if !utf8.Valid(body) {
+		req.Body = io.NopCloser(bytes.NewReader(body))
+		req.ContentLength = int64(len(body))
+		if ContainsPlaceholder(string(body)) {
+			return fmt.Errorf("request body credential rewrite requires valid UTF-8")
+		}
+		return nil
+	}
+	var rewritten string
+	if mediaType == "application/x-www-form-urlencoded" {
+		rewritten, err = rewriteFormBody(string(body), secrets)
+	} else {
+		rewritten, err = rewriteText(string(body), secrets)
+	}
+	if err != nil {
+		req.Body = io.NopCloser(bytes.NewReader(body))
+		req.ContentLength = int64(len(body))
+		return fmt.Errorf("request body credential rewrite: %w", err)
+	}
+	newBody := []byte(rewritten)
+	req.Body = io.NopCloser(bytes.NewReader(newBody))
+	req.ContentLength = int64(len(newBody))
+	req.Header.Del("Transfer-Encoding")
+	req.Header.Set("Content-Length", fmt.Sprintf("%d", len(newBody)))
+	return nil
+}
+
+func rewriteFormBody(body string, secrets SecretStore) (string, error) {
+	fields := strings.Split(body, "&")
+	for i, field := range fields {
+		key, value, hasValue := strings.Cut(field, "=")
+		decodedKey, err := url.QueryUnescape(key)
+		if err != nil {
+			return "", fmt.Errorf("invalid form field name: %w", err)
+		}
+		if ContainsPlaceholder(decodedKey) {
+			return "", fmt.Errorf("credential placeholders in form field names are unsupported")
+		}
+		if !hasValue {
+			continue
+		}
+		decodedValue, err := url.QueryUnescape(value)
+		if err != nil {
+			return "", fmt.Errorf("invalid form field value: %w", err)
+		}
+		if !ContainsPlaceholder(decodedValue) {
+			continue
+		}
+		decodedValue, err = rewriteText(decodedValue, secrets)
+		if err != nil {
+			return "", err
+		}
+		fields[i] = key + "=" + url.QueryEscape(decodedValue)
+	}
+	return strings.Join(fields, "&"), nil
 }
 
 // RewriteText resolves all placeholders in an arbitrary string (WS text frames).

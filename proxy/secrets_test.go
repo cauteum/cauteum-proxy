@@ -3,7 +3,9 @@ package proxy_test
 import (
 	"encoding/base64"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/whaleshell/whaleshell-core/env"
@@ -50,6 +52,53 @@ func TestRewriteFailClosed(t *testing.T) {
 	}
 }
 
+func TestRewriteRequestBodyOptIn(t *testing.T) {
+	body := `{"token":"` + env.PlaceholderPrefix + `API_KEY"}`
+	req, _ := http.NewRequest(http.MethodPost, "http://api.example/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if err := proxy.RewriteHTTPRequest(req, proxy.SecretStore{"API_KEY": "secret"}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(req.Body)
+	if string(got) != body {
+		t.Fatalf("default rewrite changed body: %s", got)
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "http://api.example/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if err := proxy.RewriteHTTPRequestWithOptions(req, proxy.SecretStore{"API_KEY": "secret"}, true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = io.ReadAll(req.Body)
+	if string(got) != `{"token":"secret"}` {
+		t.Fatalf("rewritten body=%s", got)
+	}
+	if req.ContentLength != int64(len(got)) || req.Header.Get("Content-Length") != "18" {
+		t.Fatalf("content length not updated: length=%d header=%q", req.ContentLength, req.Header.Get("Content-Length"))
+	}
+}
+
+func TestRewriteFormBodyCredentialValues(t *testing.T) {
+	body := "access_token=" + env.PlaceholderPrefix + "API_KEY"
+	req, _ := http.NewRequest(http.MethodPost, "http://api.example/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := proxy.RewriteHTTPRequestWithOptions(req, proxy.SecretStore{"API_KEY": "secret value"}, true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(req.Body)
+	if string(got) != "access_token=secret+value" {
+		t.Fatalf("rewritten form=%q", got)
+	}
+}
+
+func TestRewriteUnsupportedBodyContentTypeFailsOnPlaceholder(t *testing.T) {
+	req, _ := http.NewRequest(http.MethodPost, "http://api.example/", strings.NewReader(env.PlaceholderPrefix+"API_KEY"))
+	req.Header.Set("Content-Type", "application/vnd.example+json")
+	if err := proxy.RewriteHTTPRequestWithOptions(req, proxy.SecretStore{"API_KEY": "secret"}, true); err == nil {
+		t.Fatal("expected unsupported content type failure")
+	}
+}
+
 func TestRewriteLegacyPlaceholderAlias(t *testing.T) {
 	legacy := "openshell:resolve:env:API_KEY"
 	secrets := proxy.SecretStore{"API_KEY": "secret-value"}
@@ -60,6 +109,38 @@ func TestRewriteLegacyPlaceholderAlias(t *testing.T) {
 	}
 	if req.Header.Get("Authorization") != "Bearer secret-value" {
 		t.Fatalf("auth=%q", req.Header.Get("Authorization"))
+	}
+}
+
+func TestRewritePreservesEncodedSlashInPath(t *testing.T) {
+	for _, test := range []struct{ target, want string }{
+		{target: "http://api.example/repos/group%2Fproject", want: "/repos/group%2Fproject"},
+		{target: "http://api.example/repos/group%2fproject", want: "/repos/group%2fproject"},
+	} {
+		req, err := http.NewRequest(http.MethodGet, test.target, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := proxy.RewriteHTTPRequest(req, proxy.SecretStore{}); err != nil {
+			t.Fatal(err)
+		}
+		if got := req.URL.EscapedPath(); got != test.want {
+			t.Fatalf("escaped path=%q, want %q", got, test.want)
+		}
+	}
+}
+
+func TestRewriteCredentialPathPreservesEncodedSlash(t *testing.T) {
+	target := "http://api.example/repos/" + env.PlaceholderPrefix + "ORG%2Fproject"
+	req, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := proxy.RewriteHTTPRequest(req, proxy.SecretStore{"ORG": "group"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := req.URL.EscapedPath(); got != "/repos/group%2Fproject" {
+		t.Fatalf("escaped path=%q", got)
 	}
 }
 

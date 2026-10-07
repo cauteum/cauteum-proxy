@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 whaleshell
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 package proxy
 
@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ type localProposal struct {
 	RejectionReason   string          `json:"rejection_reason,omitempty"`
 	ValidationResult  string          `json:"validation_result,omitempty"`
 	CreatedAt         time.Time       `json:"created_at"`
-	DecidedAt         time.Time       `json:"decided_at,omitempty"`
+	DecidedAt         time.Time       `json:"decided_at"`
 	RawOps            json.RawMessage `json:"-"`
 	ReloadGenAtDecide int             `json:"-"`
 }
@@ -151,8 +152,8 @@ func (s *Server) policyLocalDenials(w io.Writer, req *http.Request) {
 		den = den[len(den)-last:]
 	}
 	lines := make([]string, 0, len(den))
-	for i := len(den) - 1; i >= 0; i-- {
-		lines = append(lines, den[i].Text)
+	for _, d := range slices.Backward(den) {
+		lines = append(lines, d.Text)
 	}
 	writePolicyLocalJSON(w, http.StatusOK, map[string]any{"denials": lines})
 }
@@ -324,7 +325,7 @@ func (s *Server) persistProposal(p *localProposal) error {
 		"validation_result": p.ValidationResult,
 		"status":            p.Status,
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), proposalRequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(gw, "/")+"/v1/sandboxes/"+sb+"/proposals", bytes.NewReader(payload))
 	if err != nil {
@@ -385,7 +386,7 @@ func (s *Server) policyLocalWait(w io.Writer, req *http.Request, id string) {
 		if p.Status == "approved" || p.Status == "rejected" {
 			reloaded := s.policyReloaded(p)
 			if p.Status == "approved" && !reloaded && time.Now().Before(deadline) {
-				time.Sleep(500 * time.Millisecond)
+				time.Sleep(policyPollInterval)
 				continue
 			}
 			out := proposalStatusJSON(p, reloaded)
@@ -455,7 +456,7 @@ func (s *Server) refreshProposalFromGateway(id string) {
 	if gw == "" || sb == "" || id == "" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), policyRequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(gw, "/")+"/v1/sandboxes/"+sb+"/proposals/"+id, nil)
 	if err != nil {

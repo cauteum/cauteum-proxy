@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [v0.1.0-alpha.2] - 2026-10-07
+
+### Added
+
+- Enforce HTTP query, JSON-RPC, GraphQL, and MCP policy selectors in the proxy data path.
+- Add gRPC supervisor middleware, OpenShell credential binding, and supported token-grant runtime flows.
+- Add structured `no_proxy` handling and bounded protocol, relay, and audit operations.
+
+### Changed
+
+- Use the published core and slogx alpha.2 modules; update SPIFFE, go-jose, and gRPC dependencies.
+- Distribute the module under Apache-2.0 while retaining the pinned OpenShell SDK revision for protocol compatibility.
+
+### Security
+
+- Fail closed on unresolved credential bindings, malformed protocol requests, and unsafe upstream destinations.
+
 ## [v0.0.2-alpha.1] - 2026-09-28
 
 ### Security

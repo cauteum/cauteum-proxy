@@ -16,7 +16,10 @@ import (
 
 	"github.com/whaleshell/whaleshell-core/engine"
 	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/whaleshell/whaleshell-proxy/proxy/middleware"
 )
+
+const maxRawTunnelLifetime = 30 * time.Minute
 
 func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	host, portStr, err := net.SplitHostPort(r.Host)
@@ -35,6 +38,7 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	eng := s.eng
 	allowLoop := s.allowLoopback
 	ca := s.ca
+	policyGen := s.policyGen
 	s.mu.RUnlock()
 	if eng == nil {
 		http.Error(w, "proxy not configured", http.StatusServiceUnavailable)
@@ -96,15 +100,15 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	}
 
 	needsL7 := dec.Matched != nil && dec.Matched.Rule.NeedsL7()
+	credentialed := dec.Matched != nil && blocksUninspectedCredentials(dec.Matched.Rule)
 	tlsMode := ""
 	if dec.Matched != nil {
 		tlsMode = strings.ToLower(strings.TrimSpace(dec.Matched.Rule.TLS))
 	}
-
-	if needsL7 && tlsMode != policy.TLSTerminate {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte("whaleshell-proxy: L7 over CONNECT requires tls: terminate (or use plaintext absolute-form HTTP)\n"))
-		s.logAudit(auditEvent{Action: "deny", Host: host, Port: port, Reason: "l7 connect without terminate", Allow: false})
+	if credentialed {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("whaleshell-proxy: credentialed endpoint requires L7 inspection\n"))
+		s.logAudit(auditEvent{Action: "deny", Host: host, Port: port, Reason: "credentialed endpoint requires L7 inspection", Allow: false, Binary: bin})
 		return
 	}
 
@@ -126,24 +130,89 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 		_ = backend.Close()
 		return
 	}
+	releaseTunnel, current := s.trackTunnel(clientConn, policyGen)
+	if !current {
+		_ = backend.Close()
+		_ = clientConn.Close()
+		return
+	}
 	_, _ = bufrw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
 	_ = bufrw.Flush()
 
-	if needsL7 && tlsMode == policy.TLSTerminate {
+	if needsL7 && tlsMode != "skip" {
 		if ca == nil {
 			_ = backend.Close()
 			_ = clientConn.Close()
+			releaseTunnel()
 			s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "mitm ca missing", Allow: false})
 			return
 		}
-		s.logAudit(auditEvent{Action: "allow", Host: host, Port: port, Reason: dec.Reason + " tls:terminate", Allow: true, Binary: bin})
-		go s.mitmHTTPS(clientConn, bufrw.Reader, backend, host, port, eng, bin)
+		reason := dec.Reason + " tls:auto"
+		if tlsMode == policy.TLSTerminate {
+			reason += "; 'tls: terminate' is deprecated; TLS termination is now automatic"
+		}
+		if tlsMode == policy.TLSPassthrough {
+			reason += "; 'tls: passthrough' is deprecated; TLS termination is now automatic"
+		}
+		s.logAudit(auditEvent{Action: "allow", Host: host, Port: port, Reason: reason, Allow: true, Binary: bin})
+		go func() { defer releaseTunnel(); s.mitmHTTPS(clientConn, bufrw.Reader, backend, host, port, eng, bin) }()
 		return
 	}
+	protocol := ""
+	if dec.Matched != nil {
+		protocol = strings.ToLower(strings.TrimSpace(dec.Matched.Rule.Protocol))
+	}
+	// OpenShell v1 has no SQL parser/relay. SQL audit policies pass database
+	// TLS bytes through untouched; classifying them as HTTPS would corrupt SQL.
+	if !needsL7 && tlsMode != "skip" && protocol != policy.ProtocolSQL {
+		tlsPayload, err := tunnelStartsTLS(clientConn, bufrw.Reader)
+		if err != nil {
+			_ = backend.Close()
+			_ = clientConn.Close()
+			releaseTunnel()
+			s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "TLS auto-detection: " + err.Error(), Allow: false, Binary: bin})
+			return
+		}
+		if tlsPayload {
+			if ca == nil {
+				_ = backend.Close()
+				_ = clientConn.Close()
+				releaseTunnel()
+				s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "TLS auto-detection requires MITM CA", Allow: false, Binary: bin})
+				return
+			}
+			s.logAudit(auditEvent{Action: "allow", Host: host, Port: port, Reason: dec.Reason + " tls:auto-detected", Allow: true, Binary: bin})
+			go func() { defer releaseTunnel(); s.mitmHTTPS(clientConn, bufrw.Reader, backend, host, port, eng, bin) }()
+			return
+		}
+	}
 
-	s.logAudit(auditEvent{Action: "allow", Host: host, Port: port, Reason: dec.Reason, Allow: true, Binary: bin})
+	allowReason := dec.Reason
+	if needsL7 && tlsMode == "skip" {
+		allowReason += " tls:skip (L7 bypass)"
+	}
+	s.logAudit(auditEvent{Action: "allow", Host: host, Port: port, Reason: allowReason, Allow: true, Binary: bin})
 	// Drain any buffered bytes into the tunnel.
-	go tunnelWithBuf(backend, clientConn, bufrw.Reader)
+	deadline := time.AfterFunc(maxRawTunnelLifetime, func() { _ = clientConn.Close() })
+	go func() {
+		defer deadline.Stop()
+		defer releaseTunnel()
+		tunnelWithBuf(backend, clientConn, bufrw.Reader)
+	}()
+}
+
+// tunnelStartsTLS performs the same narrow TLS record-prefix check used by
+// OpenShell's CONNECT classifier. The read deadline bounds how long a client
+// without payload bytes can hold an established CONNECT open before raw relay.
+func tunnelStartsTLS(conn net.Conn, reader *bufio.Reader) (bool, error) {
+	if err := conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+		return false, err
+	}
+	prefix, _ := reader.Peek(2)
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		return false, err
+	}
+	return len(prefix) >= 2 && prefix[0] == 0x16 && prefix[1] == 0x03, nil
 }
 
 func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net.Conn, host string, port int, eng engine.PolicyEngine, binary string) {
@@ -171,20 +240,32 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 		return
 	}
 	clientTLS := tls.Server(&bufConn{Conn: client, r: clientBuf}, tlsCfg)
-	_ = clientTLS.SetDeadline(time.Now().Add(30 * time.Second))
+	if err := clientTLS.SetDeadline(time.Now().Add(tlsHandshakeTimeout)); err != nil {
+		s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "TLS deadline: " + err.Error(), Allow: false})
+		return
+	}
 	if err := clientTLS.Handshake(); err != nil {
 		s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "client tls: " + err.Error(), Allow: false})
 		return
 	}
-	_ = clientTLS.SetDeadline(time.Time{})
+	if err := clientTLS.SetDeadline(time.Time{}); err != nil {
+		s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "TLS deadline: " + err.Error(), Allow: false})
+		return
+	}
 
 	upTLS := tls.Client(backend, upTLSCfg)
-	_ = upTLS.SetDeadline(time.Now().Add(30 * time.Second))
+	if err := upTLS.SetDeadline(time.Now().Add(tlsHandshakeTimeout)); err != nil {
+		s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "TLS deadline: " + err.Error(), Allow: false})
+		return
+	}
 	if err := upTLS.Handshake(); err != nil {
 		s.logAudit(auditEvent{Action: "dial_error", Host: host, Port: port, Reason: "upstream tls: " + err.Error(), Allow: true})
 		return
 	}
-	_ = upTLS.SetDeadline(time.Time{})
+	if err := upTLS.SetDeadline(time.Time{}); err != nil {
+		s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "TLS deadline: " + err.Error(), Allow: false})
+		return
+	}
 
 	clientBR := bufio.NewReader(clientTLS)
 	upBR := bufio.NewReader(upTLS)
@@ -194,7 +275,10 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 	s.mu.RUnlock()
 
 	for {
-		_ = clientTLS.SetReadDeadline(time.Now().Add(5 * time.Minute))
+		if err := clientTLS.SetReadDeadline(time.Now().Add(upstreamIdleTimeout)); err != nil {
+			s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "TLS deadline: " + err.Error(), Allow: false})
+			return
+		}
 		req, err := http.ReadRequest(clientBR)
 		if err != nil {
 			return
@@ -204,6 +288,10 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 			pathOnly = "/"
 		}
 		dec, err := s.decideHTTP(req, eng, host, port, pathOnly, binary)
+		pathOnly = req.URL.EscapedPath()
+		if pathOnly == "" {
+			pathOnly = "/"
+		}
 		if err != nil || !dec.Allow {
 			var reason string
 			if err == nil {
@@ -236,7 +324,7 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 			})
 		}
 
-		if err := s.runMiddleware(req.Context(), host, port, req.Method, pathOnly, req.Header); err != nil {
+		if err := s.runMiddleware(req.Context(), req, host, port, pathOnly); err != nil {
 			s.logAudit(auditEvent{
 				Action: "deny", Host: host, Port: port, Reason: err.Error(), Allow: false,
 				Method: req.Method, Path: pathOnly, Binary: binary,
@@ -261,6 +349,16 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 			bound = dec.Matched.Rule.CredentialKeys
 		}
 		used := PlaceholderKeysInRequest(req)
+		secrets, bindErr := s.resolveTokenGrantPlaceholders(req.Context(), host, port, pathOnly, req, bound, secrets)
+		if bindErr != nil {
+			s.logAudit(auditEvent{Action: "deny", Host: host, Port: port, Reason: "token grant failed", Allow: false, Method: req.Method, Path: pathOnly, Binary: binary})
+			msg := "whaleshell-proxy: token grant failed\n"
+			resp := &http.Response{StatusCode: http.StatusForbidden, ProtoMajor: 1, ProtoMinor: 1, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(msg))}
+			resp.Header.Set("Connection", "close")
+			_ = resp.Write(clientTLS)
+			_ = req.Body.Close()
+			return
+		}
 		rewSecrets, bindErr := SecretsForEndpoint(secrets, bound, used)
 		if bindErr != nil {
 			s.logAudit(auditEvent{
@@ -283,7 +381,8 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 			_ = req.Body.Close()
 			return
 		}
-		if err := RewriteHTTPRequest(req, rewSecrets); err != nil {
+		rewriteBody := dec.Matched != nil && dec.Matched.Rule.Protocol == "rest" && dec.Matched.Rule.RequestBodyCredentialRewrite
+		if err := RewriteHTTPRequestWithOptions(req, rewSecrets, rewriteBody); err != nil {
 			s.logAudit(auditEvent{
 				Action: "deny", Host: host, Port: port, Reason: "credential rewrite: " + err.Error(), Allow: false,
 				Method: req.Method, Path: pathOnly, Binary: binary,
@@ -324,15 +423,44 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 		outReq.RequestURI = ""
 
 		wantWS := isWebsocketUpgrade(req)
+		var wsSessions []middleware.WebSocketSession
+		if wantWS {
+			wsSessions, err = s.openWebSocketMiddlewareSessions(req.Context(), req, host, port, pathOnly)
+			if err != nil {
+				_ = req.Body.Close()
+				msg := "whaleshell-proxy: websocket middleware denied\n"
+				_, _ = clientTLS.Write([]byte("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: " + strconv.Itoa(len(msg)) + "\r\nConnection: close\r\n\r\n" + msg))
+				return
+			}
+		}
 		if err := outReq.Write(upTLS); err != nil {
 			_ = req.Body.Close()
 			return
 		}
-		_ = upTLS.SetReadDeadline(time.Now().Add(5 * time.Minute))
+		if err := upTLS.SetReadDeadline(time.Now().Add(upstreamIdleTimeout)); err != nil {
+			s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "TLS deadline: " + err.Error(), Allow: false})
+			return
+		}
 		resp, err := http.ReadResponse(upBR, outReq)
 		if err != nil {
+			for _, session := range wsSessions {
+				_ = session.Close("upstream failure")
+			}
 			_ = req.Body.Close()
 			return
+		}
+		if wantWS && resp.StatusCode != http.StatusSwitchingProtocols {
+			for _, session := range wsSessions {
+				_ = session.Close("upgrade rejected")
+			}
+		}
+		if !wantWS || resp.StatusCode != http.StatusSwitchingProtocols {
+			if err := s.runMiddlewareResponse(req.Context(), req, host, port, pathOnly, resp); err != nil {
+				_ = resp.Body.Close()
+				msg := "whaleshell-proxy: response middleware denied\n"
+				_, _ = clientTLS.Write([]byte("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: " + strconv.Itoa(len(msg)) + "\r\nConnection: close\r\n\r\n" + msg))
+				return
+			}
 		}
 		s.logAudit(auditEvent{
 			Action: "allow", Host: host, Port: port, Reason: dec.Reason, Allow: true,
@@ -348,12 +476,19 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 			wsRewrite := false
 			proto := ""
 			bound := []string(nil)
+			graphqlOperations := false
 			if mr := dec.Matched; mr != nil {
 				wsRewrite = mr.Rule.WebsocketCredentialRewrite
 				proto = mr.Rule.Protocol
+				graphqlOperations = mr.Rule.UsesGraphQLOperationRules()
 				bound = mr.Rule.CredentialKeys
 			}
-			s.relayWebsocket(clientBR, clientTLS, upBR, upTLS, host, port, pathOnly, eng, secrets, bound, wsRewrite, proto, binary)
+			query, err := parsePolicyQuery(req.URL.RawQuery)
+			if err != nil {
+				s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: "websocket query: " + err.Error(), Allow: false, Binary: binary})
+				return
+			}
+			s.relayWebsocket(req.Context(), clientBR, clientTLS, upBR, upTLS, host, port, pathOnly, query, eng, secrets, bound, wsRewrite, proto, graphqlOperations, binary, wsSessions)
 			return
 		}
 		if strings.EqualFold(resp.Header.Get("Connection"), "close") || req.Close || resp.Close {
@@ -367,7 +502,42 @@ func isWebsocketUpgrade(req *http.Request) bool {
 		strings.Contains(strings.ToLower(req.Header.Get("Connection")), "upgrade")
 }
 
-func (s *Server) relayWebsocket(clientBR *bufio.Reader, client io.Writer, upBR *bufio.Reader, up io.Writer, host string, port int, pathOnly string, eng engine.PolicyEngine, secrets SecretStore, boundKeys []string, rewriteText bool, protocol string, binary string) {
+func (s *Server) openWebSocketMiddlewareSessions(ctx context.Context, req *http.Request, host string, port int, pathOnly string) ([]middleware.WebSocketSession, error) {
+	s.mu.RLock()
+	pipe := s.Middleware
+	s.mu.RUnlock()
+	if pipe == nil {
+		return nil, nil
+	}
+	return pipe.OpenWebSocketSessions(ctx, middleware.WebSocketRequest{SessionID: fmt.Sprintf("%d", time.Now().UnixNano()), Host: host, Port: port, Path: pathOnly, RequestedSubprotocols: websocketSubprotocols(req.Header)})
+}
+
+func websocketSubprotocols(headers http.Header) []string {
+	var out []string
+	for _, value := range headers.Values("Sec-WebSocket-Protocol") {
+		for _, part := range strings.Split(value, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
+}
+
+func (s *Server) relayWebsocket(ctx context.Context, clientBR *bufio.Reader, client io.Writer, upBR *bufio.Reader, up io.Writer, host string, port int, pathOnly string, query map[string][]string, eng engine.PolicyEngine, secrets SecretStore, boundKeys []string, rewriteText bool, protocol string, graphqlOperations bool, binary string, wsSessions []middleware.WebSocketSession) {
+	for _, session := range wsSessions {
+		if err := session.Start(ctx, ""); err != nil {
+			_ = session.Close("session start failure")
+			return
+		}
+	}
+	defer func() {
+		for _, session := range wsSessions {
+			_ = session.Close("session ended")
+		}
+	}()
+	var sequence uint64
+	var fragments wsFragmentBuffer
 	errCh := make(chan struct{}, 2)
 	go func() {
 		defer func() { errCh <- struct{}{} }()
@@ -376,12 +546,31 @@ func (s *Server) relayWebsocket(clientBR *bufio.Reader, client io.Writer, upBR *
 			if err != nil {
 				return
 			}
+			logical, ready, err := fragments.accept(fr)
+			if err != nil {
+				_ = writeWSFrame(client, wsOpcodeClose, []byte{0x03, 0xea}, false)
+				return
+			}
+			if !ready {
+				continue
+			}
+			fr = logical
 			switch fr.Opcode {
 			case wsOpcodeText:
+				sequence++
+				for _, session := range wsSessions {
+					allow, replacement, err := session.Message(ctx, sequence, fr.Payload, true)
+					if err != nil || !allow {
+						_ = writeWSFrame(client, wsOpcodeClose, []byte{0x03, 0xef}, false)
+						return
+					}
+					fr.Payload = replacement
+				}
 				method := policy.MethodWebsocketText
 				payload := fr.Payload
-				if strings.EqualFold(protocol, policy.ProtocolGraphQL) {
-					okPass, meth, err := classifyGraphQLWS(payload)
+				var graphqlOperation *policy.GraphQLOperation
+				if strings.EqualFold(protocol, policy.ProtocolGraphQL) || graphqlOperations {
+					okPass, operation, err := classifyGraphQLWS(payload)
 					if err != nil {
 						s.logAudit(auditEvent{
 							Action: "deny", Host: host, Port: port, Reason: err.Error(), Allow: false,
@@ -396,10 +585,10 @@ func (s *Server) relayWebsocket(clientBR *bufio.Reader, client io.Writer, upBR *
 						}
 						continue
 					}
-					method = meth
+					graphqlOperation = operation
 				}
 				dec, err := eng.DecideHTTP(context.Background(), engine.HTTPRequest{
-					Host: host, Port: port, Method: method, Path: pathOnly, Binary: binary,
+					Host: host, Port: port, Method: method, Path: pathOnly, Binary: binary, GraphQL: graphqlOperation, Query: query,
 				})
 				if err != nil || !dec.Allow {
 					reason := "websocket text denied"
@@ -421,7 +610,13 @@ func (s *Server) relayWebsocket(clientBR *bufio.Reader, client io.Writer, upBR *
 				}
 				if rewriteText && ContainsPlaceholder(string(payload)) {
 					used := placeholderKeysInString(string(payload))
-					rew, bindErr := SecretsForEndpoint(secrets, boundKeys, used)
+					dynamicSecrets, bindErr := s.resolveTokenGrantKeys(ctx, host, port, pathOnly, used, boundKeys, secrets)
+					if bindErr != nil {
+						s.logAudit(auditEvent{Action: "deny", Host: host, Port: port, Reason: "token grant failed", Allow: false, Method: method, Path: pathOnly})
+						_ = writeWSFrame(client, wsOpcodeClose, []byte{0x03, 0xef}, false)
+						return
+					}
+					rew, bindErr := SecretsForEndpoint(dynamicSecrets, boundKeys, used)
 					if bindErr != nil {
 						s.logAudit(auditEvent{
 							Action: "deny", Host: host, Port: port, Reason: bindErr.Error(), Allow: false,
@@ -443,7 +638,20 @@ func (s *Server) relayWebsocket(clientBR *bufio.Reader, client io.Writer, upBR *
 				if err := writeWSFrame(up, fr.Opcode, payload, false); err != nil {
 					return
 				}
-			case wsOpcodeBinary, wsOpcodePing, wsOpcodePong, wsOpcodeContinuation:
+			case wsOpcodeBinary:
+				sequence++
+				for _, session := range wsSessions {
+					allow, replacement, err := session.Message(ctx, sequence, fr.Payload, false)
+					if err != nil || !allow {
+						_ = writeWSFrame(client, wsOpcodeClose, []byte{0x03, 0xef}, false)
+						return
+					}
+					fr.Payload = replacement
+				}
+				if err := writeWSFrame(up, fr.Opcode, fr.Payload, false); err != nil {
+					return
+				}
+			case wsOpcodePing, wsOpcodePong:
 				if err := writeWSFrame(up, fr.Opcode, fr.Payload, false); err != nil {
 					return
 				}
@@ -475,22 +683,35 @@ func (s *Server) relayWebsocket(clientBR *bufio.Reader, client io.Writer, upBR *
 	<-errCh
 }
 
-// classifyGraphQLWS returns (passWithoutL7, method, err).
-// Control messages pass; subscribe/start require MethodSubscribe; other types deny.
-func classifyGraphQLWS(payload []byte) (pass bool, method string, err error) {
+// classifyGraphQLWS returns control messages separately and extracts the
+// operation envelope from GraphQL-over-WebSocket client messages.
+func classifyGraphQLWS(payload []byte) (pass bool, operation *policy.GraphQLOperation, err error) {
 	var msg struct {
-		Type string `json:"type"`
+		ID      string          `json:"id"`
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
 	}
 	if err := json.Unmarshal(payload, &msg); err != nil {
-		return false, "", fmt.Errorf("graphql-ws: invalid json")
+		return false, nil, fmt.Errorf("graphql-ws: invalid json")
 	}
-	switch strings.ToLower(strings.TrimSpace(msg.Type)) {
-	case "connection_init", "ping", "pong", "complete", "stop", "connection_terminate", "connection_ack", "ka":
-		return true, "", nil
+	switch msg.Type {
+	case "connection_init", "ping", "pong", "complete", "stop", "connection_terminate":
+		return true, nil, nil
 	case "subscribe", "start":
-		return false, policy.MethodSubscribe, nil
+		if strings.TrimSpace(msg.ID) == "" || len(msg.Payload) == 0 || msg.Payload[0] != '{' {
+			return false, nil, fmt.Errorf("graphql-ws: operation requires a non-empty id and object payload")
+		}
+		envelope, err := decodeGraphQLEnvelope(msg.Payload)
+		if err != nil {
+			return false, nil, err
+		}
+		operations, err := classifyGraphQLEnvelopes([]graphqlEnvelope{envelope})
+		if err != nil || len(operations) != 1 {
+			return false, nil, fmt.Errorf("graphql-ws: invalid operation payload")
+		}
+		return false, &operations[0], nil
 	default:
-		return false, "", fmt.Errorf("graphql-ws: unsupported type %q", msg.Type)
+		return false, nil, fmt.Errorf("graphql-ws: unsupported type %q", msg.Type)
 	}
 }
 

@@ -67,7 +67,7 @@ func GenerateMitmCA() (*MitmCA, error) {
 			CommonName:   "whaleshell Sandbox Proxy CA",
 		},
 		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
+		NotAfter:              time.Now().Add(certificateAuthorityLifetime),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
