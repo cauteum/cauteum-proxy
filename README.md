@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/whaleshell/whaleshell-proxy/actions/workflows/ci.yml"><img src="https://github.com/whaleshell/whaleshell-proxy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://pkg.go.dev/github.com/whaleshell/whaleshell-proxy"><img src="https://pkg.go.dev/badge/github.com/whaleshell/whaleshell-proxy.svg" alt="Go Reference"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"></a>
+  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/whaleshell/whaleshell-proxy"><img src="https://img.shields.io/badge/Go-1.27+-00ADD8?logo=go" alt="Go Version"></a>
 </p>
 <p align="center">
@@ -17,6 +17,8 @@
 ---
 
 ## Overview
+
+The [policy guide](https://whaleshell.github.io/guides/policy/) covers egress rules; the [security reference](https://whaleshell.github.io/concepts/security/) records current limits.
 
 **whaleshell-proxy** is the mandatory egress sidecar for whaleshell sandboxes. It enforces policy at L4/L7, rewrites credential placeholders, emits OCSF audit lines, and exposes `policy.local` for in-sandbox proposals.
 
@@ -34,9 +36,7 @@
 
 ## Installation
 
-```bash
-go get github.com/whaleshell/whaleshell-proxy@latest
-```
+Use the sibling `go.work` workspace for source builds and run `go test ./...` in this checkout. Published alpha dependencies have not passed a standalone consumer build.
 
 Usually run as the sandbox sidecar (started by `whaleshell-driver`), not as a standalone service.
 
@@ -74,4 +74,4 @@ whaleshell proxy --listen 127.0.0.1:3128 --policy ./policy.yaml
 
 ## License
 
-[MIT](./LICENSE) © whaleshell
+[Apache-2.0](./LICENSE) © whaleshell

@@ -3,6 +3,8 @@ package proxy
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -10,8 +12,8 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
-	"time"
 )
 
 // Always-blocked ranges (SSRF): never allowed, not even via allowed_ips.
@@ -130,15 +132,22 @@ func DialSSRF(ctx context.Context, host, port string, opts SSRFOptions) (net.Con
 	if err != nil {
 		return nil, err
 	}
-	target := net.JoinHostPort(host, port)
-	if proxyURL := upstreamProxyURL(host); proxyURL != nil {
-		if len(opts.AllowedIPs) > 0 {
-			return nil, fmt.Errorf("ssrf: refusing proxy dial to %q with allowed_ips set (corp proxy is a trusted boundary, filtering would be advisory)", host)
+	proxyURL, bypass := upstreamProxyURL(host, port, addrs)
+	if proxyURL != nil {
+		targetHost := addrs[0].String()
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("WHALESHELL_PROXY_CONNECT_BY_HOSTNAME")), "true") {
+			if len(opts.AllowedIPs) > 0 {
+				return nil, fmt.Errorf("ssrf: hostname CONNECT through an upstream proxy is incompatible with allowed_ips")
+			}
+			targetHost = host
 		}
-		return dialViaHTTPProxy(ctx, proxyURL, target)
+		return dialViaHTTPProxy(ctx, proxyURL, net.JoinHostPort(targetHost, port))
+	}
+	if len(bypass) != 0 {
+		addrs = bypass
 	}
 	var last error
-	d := net.Dialer{Timeout: 15 * time.Second}
+	d := net.Dialer{Timeout: upstreamDialTimeout}
 	for _, addr := range addrs {
 		c, err := d.DialContext(ctx, "tcp", net.JoinHostPort(addr.String(), port))
 		if err != nil {
@@ -153,7 +162,8 @@ func DialSSRF(ctx context.Context, host, port string, opts SSRFOptions) (net.Con
 	return nil, last
 }
 
-func upstreamProxyURL(destHost string) *url.URL {
+func upstreamProxyURL(destHost, destPort string, addrs []netip.Addr) (*url.URL, []netip.Addr) {
+	parsedPort, _ := strconv.ParseUint(destPort, 10, 16)
 	for _, key := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"} {
 		raw := strings.TrimSpace(os.Getenv(key))
 		if raw == "" {
@@ -163,29 +173,14 @@ func upstreamProxyURL(destHost string) *url.URL {
 		if err != nil || u.Host == "" {
 			continue
 		}
-		if noProxyMatch(destHost, os.Getenv("NO_PROXY")+","+os.Getenv("no_proxy")) {
-			return nil
+		if parsedPort != 0 {
+			if direct := noProxyAddresses(destHost, uint16(parsedPort), os.Getenv("NO_PROXY")+","+os.Getenv("no_proxy"), addrs); len(direct) > 0 {
+				return nil, direct
+			}
 		}
-		return u
+		return u, nil
 	}
-	return nil
-}
-
-func noProxyMatch(host, noProxy string) bool {
-	host = strings.ToLower(strings.TrimSpace(host))
-	for _, p := range strings.Split(noProxy, ",") {
-		p = strings.ToLower(strings.TrimSpace(p))
-		if p == "" {
-			continue
-		}
-		if p == "*" {
-			return true
-		}
-		if host == p || strings.HasSuffix(host, "."+strings.TrimPrefix(p, ".")) {
-			return true
-		}
-	}
-	return false
+	return nil, nil
 }
 
 func dialViaHTTPProxy(ctx context.Context, proxyURL *url.URL, target string) (net.Conn, error) {
@@ -197,10 +192,35 @@ func dialViaHTTPProxy(ctx context.Context, proxyURL *url.URL, target string) (ne
 			addr = net.JoinHostPort(proxyURL.Hostname(), "80")
 		}
 	}
-	d := net.Dialer{Timeout: 15 * time.Second}
+	d := net.Dialer{Timeout: upstreamDialTimeout}
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("upstream proxy dial: %w", err)
+	}
+	if strings.EqualFold(proxyURL.Scheme, "https") {
+		tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: proxyURL.Hostname()}
+		if caPath := strings.TrimSpace(os.Getenv("WHALESHELL_PROXY_CA_BUNDLE")); caPath != "" {
+			body, readErr := os.ReadFile(caPath)
+			if readErr != nil {
+				_ = conn.Close()
+				return nil, fmt.Errorf("read upstream proxy CA bundle")
+			}
+			roots, poolErr := x509.SystemCertPool()
+			if poolErr != nil || roots == nil {
+				roots = x509.NewCertPool()
+			}
+			if !roots.AppendCertsFromPEM(body) {
+				_ = conn.Close()
+				return nil, fmt.Errorf("upstream proxy CA bundle contains no certificates")
+			}
+			tlsConfig.RootCAs = roots
+		}
+		tlsConn := tls.Client(conn, tlsConfig)
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("upstream proxy TLS handshake failed")
+		}
+		conn = tlsConn
 	}
 	req := &http.Request{
 		Method: http.MethodConnect,
@@ -212,6 +232,19 @@ func dialViaHTTPProxy(ctx context.Context, proxyURL *url.URL, target string) (ne
 	if proxyURL.User != nil {
 		pass, _ := proxyURL.User.Password()
 		token := base64.StdEncoding.EncodeToString([]byte(proxyURL.User.Username() + ":" + pass))
+		req.Header.Set("Proxy-Authorization", "Basic "+token)
+	} else if authPath := strings.TrimSpace(os.Getenv("WHALESHELL_PROXY_AUTH_FILE")); authPath != "" {
+		body, err := os.ReadFile(authPath)
+		if err != nil || len(body) > 64*1024 {
+			_ = conn.Close()
+			return nil, fmt.Errorf("read upstream proxy auth file")
+		}
+		username, password, ok := strings.Cut(strings.TrimSpace(string(body)), ":")
+		if !ok || strings.TrimSpace(username) == "" {
+			_ = conn.Close()
+			return nil, fmt.Errorf("upstream proxy auth file must contain user:pass")
+		}
+		token := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
 		req.Header.Set("Proxy-Authorization", "Basic "+token)
 	}
 	if err := req.Write(conn); err != nil {

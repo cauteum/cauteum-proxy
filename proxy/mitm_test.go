@@ -66,11 +66,9 @@ func TestConcurrentLeafGenerationSharesResult(t *testing.T) {
 	var group sync.WaitGroup
 	results := make([]*tls.Certificate, callers)
 	for i := range callers {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			results[i], _ = ca.Leaf("same.example")
-		}()
+		})
 	}
 	group.Wait()
 	for _, cert := range results {

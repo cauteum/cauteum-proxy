@@ -28,7 +28,9 @@ func (s *Server) logAudit(ev auditEvent) {
 	}
 	ev.TS = time.Now().UTC().Format(time.RFC3339Nano)
 	line := formatOCSF(ev)
+	s.auditMu.Lock()
 	_, _ = fmt.Fprintln(s.audit, line)
+	s.auditMu.Unlock()
 	if ev.Action == "deny" || ev.Action == "reject" {
 		s.recordDenial(line)
 	}

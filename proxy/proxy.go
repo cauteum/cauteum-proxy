@@ -3,8 +3,10 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
@@ -12,8 +14,8 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
-	"time"
 
 	"github.com/whaleshell/whaleshell-core"
 	"github.com/whaleshell/whaleshell-core/engine"
@@ -27,24 +29,35 @@ type EgressProxy interface {
 	Close(ctx context.Context) error
 }
 
+// PolicyStatusReporter reports the revision applied by the proxy to the
+// gateway. Implementations must authenticate as the owning sandbox.
+type PolicyStatusReporter func(ctx context.Context, revision uint32, loadError string) error
+
 // Server is a default-deny HTTP proxy (CONNECT + absolute-form HTTP) backed by engine.PolicyEngine.
 type Server struct {
-	mu            sync.RWMutex
-	eng           engine.PolicyEngine
-	doc           policy.Document
-	policyGen     int
-	audit         io.Writer
-	server        *http.Server
-	ca            *MitmCA
-	secrets       SecretStore
-	Middleware    *middleware.Pipeline
-	allowLoopback bool // test-only: SSRF permits 127.0.0.0/8 + ::1. See NewServerForTests.
+	mu                 sync.RWMutex
+	auditMu            sync.Mutex
+	eng                engine.PolicyEngine
+	doc                policy.Document
+	policyGen          int
+	audit              io.Writer
+	server             *http.Server
+	activeTunnels      map[net.Conn]struct{}
+	ca                 *MitmCA
+	secrets            SecretStore
+	tokenGrants        map[string]TokenGrantCredential
+	tokenGrantResolver TokenGrantResolver
+	Middleware         *middleware.Pipeline
+	allowLoopback      bool // test-only: SSRF permits 127.0.0.0/8 + ::1. See NewServerForTests.
 	// UpstreamTLS overrides the TLS client config used when dialing real backends after terminate.
 	// Tests may set InsecureSkipVerify; production leaves this nil (system roots).
 	UpstreamTLS *tls.Config
 	// GatewayToken is the sandbox-scoped supervisor bearer for gateway calls
 	// (proposals). Never exposed to placeholder resolution.
 	GatewayToken string
+	// ReportPolicyStatus acknowledges policy application to the gateway. A nil
+	// reporter keeps standalone/debug proxy operation independent of a gateway.
+	ReportPolicyStatus PolicyStatusReporter
 
 	denials   []denialLine
 	proposals map[string]*localProposal
@@ -63,12 +76,28 @@ func NewServer(eng engine.PolicyEngine, audit io.Writer) *Server {
 		// Still usable for L4 / plaintext; terminate will fail closed.
 		ca = nil
 	}
-	return &Server{
+	srv := &Server{
 		eng: eng, audit: audit, ca: ca,
-		secrets:    LoadSecretsFromEnviron(os.Environ()),
-		Middleware: middleware.FromEnviron(os.Environ()),
-		proposals:  map[string]*localProposal{},
+		secrets:     LoadSecretsFromEnviron(os.Environ()),
+		tokenGrants: loadTokenGrantsFromEnviron(os.Environ()),
+		Middleware:  middleware.FromEnviron(os.Environ()),
+		proposals:   map[string]*localProposal{},
 	}
+	if len(srv.tokenGrants) > 0 {
+		srv.tokenGrantResolver = NewSPIFFETokenGrantResolver()
+	}
+	if caPath := strings.TrimSpace(os.Getenv("WHALESHELL_PROXY_CA_BUNDLE")); caPath != "" {
+		roots, err := x509.SystemCertPool()
+		if err != nil || roots == nil {
+			roots = x509.NewCertPool()
+		}
+		body, readErr := os.ReadFile(caPath)
+		if readErr != nil || !roots.AppendCertsFromPEM(body) {
+			roots = x509.NewCertPool()
+		}
+		srv.UpstreamTLS = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}
+	}
+	return srv
 }
 
 // SetSecrets replaces the credential placeholder resolution map.
@@ -90,7 +119,33 @@ func (s *Server) Apply(_ context.Context, doc policy.Document) error {
 	}
 	s.doc = doc
 	s.policyGen++
+	for conn := range s.activeTunnels {
+		_ = conn.Close()
+		delete(s.activeTunnels, conn)
+	}
+	for _, warning := range doc.TLSWarnings() {
+		s.logAudit(auditEvent{Action: "audit", Reason: warning, Allow: true})
+	}
 	return nil
+}
+
+// trackTunnel binds an established stream to the policy generation that
+// authorized it. A concurrent update invalidates stale decisions.
+func (s *Server) trackTunnel(conn net.Conn, generation int) (func(), bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.policyGen != generation {
+		return nil, false
+	}
+	if s.activeTunnels == nil {
+		s.activeTunnels = make(map[net.Conn]struct{})
+	}
+	s.activeTunnels[conn] = struct{}{}
+	return func() {
+		s.mu.Lock()
+		delete(s.activeTunnels, conn)
+		s.mu.Unlock()
+	}, true
 }
 
 // CurrentDocument returns the last successfully applied policy (copy).
@@ -129,7 +184,7 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	srv := &http.Server{
 		Handler:           s.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: headerReadTimeout,
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 			return withConn(ctx, c)
 		},
@@ -145,7 +200,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 
 	select {
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
 		err := <-errCh
@@ -241,6 +296,10 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 		s.logAudit(auditEvent{Action: "error", Host: host, Port: port, Reason: err.Error(), Allow: false, Binary: bin})
 		return
 	}
+	pathOnly = r.URL.EscapedPath()
+	if pathOnly == "" {
+		pathOnly = "/"
+	}
 	if !dec.Allow {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte("whaleshell-proxy: denied\n"))
@@ -257,7 +316,7 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := s.runMiddleware(r.Context(), host, port, r.Method, pathOnly, r.Header); err != nil {
+	if err := s.runMiddleware(r.Context(), r, host, port, pathOnly); err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte("whaleshell-proxy: middleware denied\n"))
 		s.logAudit(auditEvent{
@@ -272,6 +331,13 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 		bound = dec.Matched.Rule.CredentialKeys
 	}
 	used := PlaceholderKeysInRequest(r)
+	secrets, err = s.resolveTokenGrantPlaceholders(r.Context(), host, port, pathOnly, r, bound, secrets)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("whaleshell-proxy: token grant failed\n"))
+		s.logAudit(auditEvent{Action: "deny", Host: host, Port: port, Reason: "token grant failed", Allow: false, Method: r.Method, Path: pathOnly, Binary: bin})
+		return
+	}
 	rewSecrets, err := SecretsForEndpoint(secrets, bound, used)
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
@@ -286,7 +352,8 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if err := RewriteHTTPRequest(r, rewSecrets); err != nil {
+	rewriteBody := dec.Matched != nil && dec.Matched.Rule.Protocol == "rest" && dec.Matched.Rule.RequestBodyCredentialRewrite
+	if err := RewriteHTTPRequestWithOptions(r, rewSecrets, rewriteBody); err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte("whaleshell-proxy: credential rewrite failed\n"))
 		s.logAudit(auditEvent{
@@ -344,6 +411,11 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	if err := s.runMiddlewareResponse(r.Context(), r, host, port, pathOnly, resp); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("whaleshell-proxy: response middleware denied\n"))
+		return
+	}
 	for k, vv := range resp.Header {
 		for _, v := range vv {
 			w.Header().Add(k, v)
@@ -357,21 +429,63 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) runMiddleware(ctx context.Context, host string, port int, method, pathOnly string, hdr http.Header) error {
+const maxBufferedMiddlewareResponse = 64 << 20
+
+func (s *Server) runMiddlewareResponse(ctx context.Context, request *http.Request, host string, port int, pathOnly string, resp *http.Response) error {
+	s.mu.RLock()
+	pipe := s.Middleware
+	s.mu.RUnlock()
+	if pipe == nil || !pipe.HasResponseStages() {
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBufferedMiddlewareResponse+1))
+	_ = resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("read response for middleware: %w", err)
+	}
+	if len(body) > maxBufferedMiddlewareResponse {
+		return fmt.Errorf("response exceeds middleware buffer")
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	reqHeaders := map[string]string{}
+	for name, values := range request.Header {
+		if len(values) > 0 {
+			reqHeaders[name] = values[0]
+		}
+	}
+	response := &middleware.Response{StatusCode: resp.StatusCode, Headers: resp.Header, Trailers: resp.Trailer, Body: body}
+	err = pipe.RunResponse(ctx, middleware.Request{Host: host, Port: port, Method: request.Method, Path: pathOnly, Headers: reqHeaders}, response)
+	if err != nil {
+		return err
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(response.Body))
+	resp.ContentLength = int64(len(response.Body))
+	resp.Header = response.Headers
+	resp.Trailer = response.Trailers
+	resp.Header.Set("Content-Length", strconv.Itoa(len(response.Body)))
+	return nil
+}
+
+func (s *Server) runMiddleware(ctx context.Context, r *http.Request, host string, port int, pathOnly string) error {
 	s.mu.RLock()
 	pipe := s.Middleware
 	s.mu.RUnlock()
 	if pipe == nil || len(pipe.Stages) == 0 {
 		return nil
 	}
+	body, err := middlewareRequestBody(r)
+	if err != nil {
+		return err
+	}
 	h := map[string]string{}
-	for k, vv := range hdr {
+	for k, vv := range r.Header {
 		if len(vv) > 0 {
 			h[k] = vv[0]
 		}
 	}
 	dec, err := pipe.Run(ctx, middleware.Request{
-		Host: host, Port: port, Method: method, Path: pathOnly, Headers: h,
+		Host: host, Port: port, Method: r.Method, Path: pathOnly, Headers: h, Body: body,
 	})
 	if err != nil {
 		return err
@@ -382,10 +496,51 @@ func (s *Server) runMiddleware(ctx context.Context, host string, port int, metho
 		}
 		return fmt.Errorf("%s", dec.Reason)
 	}
+	handledHeaders := map[string]struct{}{}
+	for _, mutation := range dec.HeaderMutations {
+		handledHeaders[mutation.Name] = struct{}{}
+	}
 	for k, v := range dec.MutateHeaders {
-		hdr.Set(k, v)
+		if _, handled := handledHeaders[k]; !handled {
+			r.Header.Set(k, v)
+		}
+	}
+	for _, mutation := range dec.HeaderMutations {
+		if mutation.Remove {
+			r.Header.Del(mutation.Name)
+		} else if mutation.Append {
+			r.Header.Add(mutation.Name, mutation.Value)
+		} else if !mutation.Skip || r.Header.Get(mutation.Name) == "" {
+			r.Header.Set(mutation.Name, mutation.Value)
+		}
+	}
+	for _, name := range dec.RemoveHeaders {
+		r.Header.Del(name)
+	}
+	if dec.HasBody {
+		r.Body = io.NopCloser(bytes.NewReader(dec.Body))
+		r.ContentLength = int64(len(dec.Body))
 	}
 	return nil
+}
+
+const maxMiddlewareRequestBody = 4 << 20
+
+func middlewareRequestBody(r *http.Request) ([]byte, error) {
+	if r == nil || r.Body == nil || r.Body == http.NoBody {
+		return nil, nil
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxMiddlewareRequestBody+1))
+	_ = r.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("read middleware request body: %w", err)
+	}
+	if len(body) > maxMiddlewareRequestBody {
+		return nil, fmt.Errorf("middleware request body exceeds %d bytes", maxMiddlewareRequestBody)
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.ContentLength = int64(len(body))
+	return body, nil
 }
 
 func (s *Server) decideHTTP(r *http.Request, eng engine.PolicyEngine, host string, port int, pathOnly, binary string) (engine.Decision, error) {
@@ -396,18 +551,104 @@ func (s *Server) decideHTTP(r *http.Request, eng engine.PolicyEngine, host strin
 	if !l4.Allow {
 		return l4, nil
 	}
+	if l4.Matched != nil && blocksUninspectedCredentials(l4.Matched.Rule) {
+		return engine.Decision{
+			Allow: false, Reason: "credentialed endpoint requires L7 inspection; set allow_uninspected_credentials: true to opt in",
+			Matched: l4.Matched,
+		}, nil
+	}
+	if l4.Matched != nil && l4.Matched.Rule.NeedsL7() {
+		if r.URL.Fragment != "" || strings.Contains(r.RequestURI, "#") {
+			return engine.Decision{Allow: false, Reason: "http path: request target contains a fragment", Matched: l4.Matched}, nil
+		}
+		canonical, err := canonicalizeL7Path(requestTargetPath(r, pathOnly), l4.Matched.Rule.AllowEncodedSlash)
+		if err != nil {
+			return engine.Decision{Allow: false, Reason: "http path: " + err.Error(), Matched: l4.Matched}, nil
+		}
+		decoded, err := url.PathUnescape(canonical)
+		if err != nil {
+			return engine.Decision{}, fmt.Errorf("canonical path: %w", err)
+		}
+		r.URL.Path = decoded
+		r.URL.RawPath = canonical
+		pathOnly = canonical
+	}
+	var query map[string][]string
+	if l4.Matched != nil && l4.Matched.Rule.NeedsL7() {
+		query, err = parsePolicyQuery(r.URL.RawQuery)
+		if err != nil {
+			return engine.Decision{Allow: false, Reason: "http query: " + err.Error(), Matched: l4.Matched}, nil
+		}
+	}
 	if l4.Matched != nil && isMCPRule(&l4.Matched.Rule) {
-		method, tool, err := parseMCPRequest(r)
+		mcpConfig := l4.Matched.Rule.MCP
+		if mcpConfig == nil && l4.Matched.Rule.JSONRPC != nil && l4.Matched.Rule.JSONRPC.MaxBodyBytes != nil {
+			mcpConfig = &policy.MCPConfig{MaxBodyBytes: *l4.Matched.Rule.JSONRPC.MaxBodyBytes}
+		}
+		messages, err := parseMCPMessages(r, mcpConfig)
 		if err != nil {
 			return engine.Decision{Allow: false, Reason: err.Error(), Matched: l4.Matched}, nil
 		}
-		return eng.DecideHTTP(r.Context(), engine.HTTPRequest{
-			Host: host, Port: port, Method: method, Path: mcpDecidePath(pathOnly, tool), Binary: binary,
-		})
+		var audit bool
+		for _, message := range messages {
+			if message.response || message.receiveStream {
+				continue // MCP permits client responses to server-initiated requests.
+			}
+			decision, err := eng.DecideHTTP(r.Context(), engine.HTTPRequest{
+				Query: query,
+				Host:  host, Port: port, Method: message.method, Path: mcpDecidePath(pathOnly, message.tool), Binary: binary,
+			})
+			if err != nil || !decision.Allow {
+				return decision, err
+			}
+			audit = audit || decision.Audit
+		}
+		return engine.Decision{Allow: true, Audit: audit, Reason: "all MCP messages allowed", Matched: l4.Matched}, nil
+	}
+	if l4.Matched != nil && strings.EqualFold(strings.TrimSpace(l4.Matched.Rule.Protocol), policy.ProtocolJSONRPC) {
+		methods, err := parseJSONRPCRequest(r, l4.Matched.Rule.JSONRPC)
+		if err != nil {
+			return engine.Decision{Allow: false, Reason: err.Error(), Matched: l4.Matched}, nil
+		}
+		var audit bool
+		for _, method := range methods {
+			decision, err := eng.DecideHTTP(r.Context(), engine.HTTPRequest{
+				Query: query,
+				Host:  host, Port: port, Method: method, Path: pathOnly, Binary: binary,
+			})
+			if err != nil || !decision.Allow {
+				return decision, err
+			}
+			audit = audit || decision.Audit
+		}
+		return engine.Decision{Allow: true, Audit: audit, Reason: "all JSON-RPC methods allowed", Matched: l4.Matched}, nil
+	}
+	if l4.Matched != nil && strings.EqualFold(strings.TrimSpace(l4.Matched.Rule.Protocol), policy.ProtocolGraphQL) {
+		operations, err := parseGraphQLRequest(r, l4.Matched.Rule)
+		if err != nil {
+			return engine.Decision{Allow: false, Reason: err.Error(), Matched: l4.Matched}, nil
+		}
+		var audit bool
+		for _, operation := range operations {
+			decision, err := eng.DecideHTTP(r.Context(), engine.HTTPRequest{
+				Query: query,
+				Host:  host, Port: port, Method: r.Method, Path: pathOnly, Binary: binary, GraphQL: &operation,
+			})
+			if err != nil || !decision.Allow {
+				return decision, err
+			}
+			audit = audit || decision.Audit
+		}
+		return engine.Decision{Allow: true, Audit: audit, Reason: "all GraphQL operations allowed", Matched: l4.Matched}, nil
 	}
 	return eng.DecideHTTP(r.Context(), engine.HTTPRequest{
-		Host: host, Port: port, Method: r.Method, Path: pathOnly, Binary: binary,
+		Query: query,
+		Host:  host, Port: port, Method: r.Method, Path: pathOnly, Binary: binary,
 	})
+}
+
+func blocksUninspectedCredentials(rule policy.AllowRule) bool {
+	return len(rule.CredentialKeys) > 0 && !rule.NeedsL7() && !rule.AllowUninspectedCredentials
 }
 
 // CONNECT is kept as a thin Apply-only adapter for sandbox.Manager.

@@ -2,26 +2,17 @@ package middleware
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-func TestJWTStubAudience(t *testing.T) {
-	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"aud":"whaleshell"}`))
-	token := "x." + payload + ".y"
-	st := &jwtStub{Audience: "whaleshell", Required: true}
-	dec, err := st.Evaluate(context.Background(), Request{
-		Headers: map[string]string{"Authorization": "Bearer " + token},
-	})
-	if err != nil || !dec.Allow {
-		t.Fatalf("dec=%v err=%v", dec, err)
-	}
-	dec, _ = st.Evaluate(context.Background(), Request{})
-	if dec.Allow {
-		t.Fatal("expected deny without token")
+func TestRemovedJWTConfigFailsClosed(t *testing.T) {
+	stage := &rejectedConfigStage{Label: "removed_jwt_env", Reason: "JWT middleware environment configuration was removed; refusing request"}
+	decision, err := stage.Evaluate(context.Background(), Request{Headers: map[string]string{"Authorization": "Bearer forged"}})
+	if err != nil || decision.Allow || decision.Reason == "" {
+		t.Fatalf("decision=%+v err=%v; removed JWT configuration must never authorize", decision, err)
 	}
 }
 

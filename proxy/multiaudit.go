@@ -2,8 +2,10 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +26,13 @@ type AuditLine struct {
 type LogPusher interface {
 	PostLogs(ctx context.Context, sandbox string, lines []AuditLine) error
 }
+
+const (
+	auditBatchSize     = 8
+	auditFlushInterval = 2 * time.Second
+	auditPushTimeout   = 3 * time.Second
+	auditRetentionDays = 3
+)
 
 // MultiAudit writes OCSF lines to several sinks (stderr, daily file, gateway).
 type MultiAudit struct {
@@ -54,6 +63,7 @@ func NewMultiAudit(primary io.Writer, logDir, sandbox string, pusher LogPusher) 
 	if m.sandbox == "" {
 		m.pusher = nil
 	}
+	// File initialization is retried by Write, which reports any failure to its caller.
 	_ = m.rotateFileLocked()
 	return m
 }
@@ -61,13 +71,21 @@ func NewMultiAudit(primary io.Writer, logDir, sandbox string, pusher LogPusher) 
 func (m *MultiAudit) Write(p []byte) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	_ = m.rotateFileLocked()
+	writeErr := m.rotateFileLocked()
 	n := len(p)
+	writeSink := func(w io.Writer) {
+		written, err := w.Write(p)
+		n = min(n, written)
+		if written < len(p) && err == nil {
+			err = io.ErrShortWrite
+		}
+		writeErr = errors.Join(writeErr, err)
+	}
 	for _, w := range m.writers {
-		_, _ = w.Write(p)
+		writeSink(w)
 	}
 	if m.file != nil {
-		_, _ = m.file.Write(p)
+		writeSink(m.file)
 	}
 	text := strings.TrimRight(string(p), "\r\n")
 	if text != "" && m.pusher != nil {
@@ -82,11 +100,11 @@ func (m *MultiAudit) Write(p []byte) (int, error) {
 		m.buf = append(m.buf, AuditLine{
 			TS: time.Now().UTC(), Source: m.source, Level: level, Text: text,
 		})
-		if len(m.buf) >= 8 || time.Since(m.lastPush) > 2*time.Second {
+		if len(m.buf) >= auditBatchSize || time.Since(m.lastPush) > auditFlushInterval {
 			m.flushGWLocked()
 		}
 	}
-	return n, nil
+	return n, writeErr
 }
 
 func (m *MultiAudit) flushGWLocked() {
@@ -99,9 +117,11 @@ func (m *MultiAudit) flushGWLocked() {
 	pusher := m.pusher
 	sandbox := m.sandbox
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), auditPushTimeout)
 		defer cancel()
-		_ = pusher.PostLogs(ctx, sandbox, lines)
+		if err := pusher.PostLogs(ctx, sandbox, lines); err != nil {
+			slog.Warn("gateway audit delivery failed", "sandbox", sandbox, "error", err)
+		}
 	}()
 }
 
@@ -135,9 +155,9 @@ func (m *MultiAudit) rotateFileLocked() error {
 			logs = append(logs, e.Name())
 		}
 	}
-	if len(logs) > 3 {
+	if len(logs) > auditRetentionDays {
 		// best-effort delete oldest by name (YYYY-MM-DD sorts)
-		for _, name := range logs[:len(logs)-3] {
+		for _, name := range logs[:len(logs)-auditRetentionDays] {
 			_ = os.Remove(filepath.Join(m.logDir, name))
 		}
 	}
