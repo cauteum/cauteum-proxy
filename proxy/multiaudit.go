@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/whaleshell/slogx"
 )
 
 // AuditLine is one OCSF/observation line pushed to a gateway log sink.
@@ -120,7 +122,7 @@ func (m *MultiAudit) flushGWLocked() {
 		ctx, cancel := context.WithTimeout(context.Background(), auditPushTimeout)
 		defer cancel()
 		if err := pusher.PostLogs(ctx, sandbox, lines); err != nil {
-			slog.Warn("gateway audit delivery failed", "sandbox", sandbox, "error", err)
+			slog.Warn("gateway audit delivery failed", slog.String("sandbox", sandbox), slogx.Err(err))
 		}
 	}()
 }
