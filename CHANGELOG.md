@@ -1,6 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## [v0.1.0-beta.1] - 2026-10-07
+
+### Added
+
+- Add structured lifecycle logs for proxy operations.
+
+### Changed
+
+- Use `whaleshell-core` v0.1.0-beta.1.
+- Update the OpenShell Go SDK to its 2026-10-07 revision.
+
+### Fixed
+
+- Keep Unix-only workload socket coverage out of cross-platform test builds.
 
 ## [v0.1.0-alpha.2] - 2026-10-07
 
