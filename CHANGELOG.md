@@ -9,7 +9,6 @@
 ### Changed
 
 - Use `whaleshell-core` v0.1.0-beta.1.
-- Update the OpenShell Go SDK to its 2026-10-07 revision.
 
 ### Fixed
 
