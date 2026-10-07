@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/whaleshell/slogx"
 	"github.com/whaleshell/whaleshell-core"
 	"github.com/whaleshell/whaleshell-core/engine"
 	"github.com/whaleshell/whaleshell-core/policy"
@@ -48,6 +50,7 @@ type Server struct {
 	tokenGrants        map[string]TokenGrantCredential
 	tokenGrantResolver TokenGrantResolver
 	Middleware         *middleware.Pipeline
+	log                *slog.Logger
 	allowLoopback      bool // test-only: SSRF permits 127.0.0.0/8 + ::1. See NewServerForTests.
 	// UpstreamTLS overrides the TLS client config used when dialing real backends after terminate.
 	// Tests may set InsecureSkipVerify; production leaves this nil (system roots).
@@ -71,13 +74,16 @@ func NewServer(eng engine.PolicyEngine, audit io.Writer) *Server {
 	if audit == nil {
 		audit = os.Stderr
 	}
+	log := slog.Default().With(slog.String("component", "egress-proxy"))
 	ca, err := GenerateMitmCA()
 	if err != nil {
 		// Still usable for L4 / plaintext; terminate will fail closed.
+		log.Warn("MITM CA generation failed; HTTPS interception is unavailable", slogx.Err(err))
 		ca = nil
 	}
 	srv := &Server{
 		eng: eng, audit: audit, ca: ca,
+		log:         log,
 		secrets:     LoadSecretsFromEnviron(os.Environ()),
 		tokenGrants: loadTokenGrantsFromEnviron(os.Environ()),
 		Middleware:  middleware.FromEnviron(os.Environ()),
@@ -100,6 +106,13 @@ func NewServer(eng engine.PolicyEngine, audit io.Writer) *Server {
 	return srv
 }
 
+func (s *Server) logger() *slog.Logger {
+	if s.log != nil {
+		return s.log
+	}
+	return slog.Default()
+}
+
 // SetSecrets replaces the credential placeholder resolution map.
 func (s *Server) SetSecrets(secrets SecretStore) {
 	s.mu.Lock()
@@ -119,6 +132,7 @@ func (s *Server) Apply(_ context.Context, doc policy.Document) error {
 	}
 	s.doc = doc
 	s.policyGen++
+	s.logger().Info("proxy policy applied", slog.String("op", "proxy.policy.apply"), slog.Int("generation", s.policyGen))
 	for conn := range s.activeTunnels {
 		_ = conn.Close()
 		delete(s.activeTunnels, conn)
@@ -175,6 +189,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
+		s.logger().Error("proxy listener bind failed", slog.String("op", "proxy.serve"), slog.String("addr", addr), slogx.Err(err))
 		return fmt.Errorf("proxy listen: %w", err)
 	}
 	return s.Serve(ctx, ln)
@@ -182,6 +197,7 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 
 // Serve serves on ln until ctx is cancelled.
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
+	log := s.logger().With(slog.String("op", "proxy.serve"), slog.String("addr", ln.Addr().String()))
 	srv := &http.Server{
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: headerReadTimeout,
@@ -192,6 +208,8 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	s.mu.Lock()
 	s.server = srv
 	s.mu.Unlock()
+	log.Info("proxy listener started")
+	defer log.Info("proxy listener stopped")
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -200,17 +218,26 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 
 	select {
 	case <-ctx.Done():
+		log.Debug("proxy shutdown requested")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
-		_ = srv.Shutdown(shutdownCtx)
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Warn("proxy graceful shutdown failed", slogx.Err(err))
+		}
 		err := <-errCh
 		if err == http.ErrServerClosed {
 			return ctx.Err()
+		}
+		if err != nil {
+			log.Error("proxy server failed during shutdown", slogx.Err(err))
 		}
 		return err
 	case err := <-errCh:
 		if err == http.ErrServerClosed {
 			return nil
+		}
+		if err != nil {
+			log.Error("proxy server failed", slogx.Err(err))
 		}
 		return err
 	}
