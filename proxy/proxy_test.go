@@ -398,8 +398,8 @@ func TestCONNECTSQLAuditPassesTLSBytesWithoutHTTPMITM(t *testing.T) {
 	if err = eng.Apply(doc); err != nil {
 		t.Fatal(err)
 	}
-	var audit strings.Builder
-	srv := proxy.NewServerForTests(&eng, &audit)
+	auditLines := make(chan string, 4)
+	srv := proxy.NewServerForTests(&eng, auditLineWriter(auditLines))
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -435,7 +435,22 @@ func TestCONNECTSQLAuditPassesTLSBytesWithoutHTTPMITM(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("backend did not receive TLS record bytes through SQL audit tunnel")
 	}
-	if !strings.Contains(audit.String(), "SQL command inspection is unavailable") {
-		t.Fatalf("missing SQL audit-only diagnostic: %s", audit.String())
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case line := <-auditLines:
+			if strings.Contains(line, "SQL command inspection is unavailable") {
+				return
+			}
+		case <-deadline:
+			t.Fatal("missing SQL audit-only diagnostic")
+		}
 	}
+}
+
+type auditLineWriter chan string
+
+func (w auditLineWriter) Write(p []byte) (int, error) {
+	w <- string(p)
+	return len(p), nil
 }

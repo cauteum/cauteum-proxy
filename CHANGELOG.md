@@ -18,6 +18,7 @@
 ### Security
 
 - Fail closed on unresolved credential bindings, malformed protocol requests, and unsafe upstream destinations.
+- Serialize audit output from concurrent request handlers to keep records intact.
 
 ## [v0.0.2-alpha.1] - 2026-09-28
 

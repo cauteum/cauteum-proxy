@@ -36,6 +36,7 @@ type PolicyStatusReporter func(ctx context.Context, revision uint32, loadError s
 // Server is a default-deny HTTP proxy (CONNECT + absolute-form HTTP) backed by engine.PolicyEngine.
 type Server struct {
 	mu                 sync.RWMutex
+	auditMu            sync.Mutex
 	eng                engine.PolicyEngine
 	doc                policy.Document
 	policyGen          int

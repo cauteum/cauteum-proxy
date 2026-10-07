@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -142,6 +143,9 @@ func (s *tokenGrantWorkloadAPIServer) FetchJWTBundles(_ *workload.JWTBundlesRequ
 }
 
 func TestSPIFFETokenGrantResolverUsesWorkloadSVIDAndRefreshesAfterExpiry(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the SPIFFE Workload API client uses a named pipe on Windows, not a Unix socket")
+	}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +185,7 @@ func TestSPIFFETokenGrantResolverUsesWorkloadSVIDAndRefreshesAfterExpiry(t *test
 		t.Fatal(err)
 	}
 
-	socketDir, err := os.MkdirTemp("/tmp", "wapi")
+	socketDir, err := os.MkdirTemp("", "wapi")
 	if err != nil {
 		t.Fatal(err)
 	}
