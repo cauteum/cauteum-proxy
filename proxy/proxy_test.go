@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whaleshell/whaleshell-core/engine"
-	"github.com/whaleshell/whaleshell-core/policy"
-	"github.com/whaleshell/whaleshell-proxy/proxy"
+	"github.com/cauteum/cauteum-core/engine"
+	"github.com/cauteum/cauteum-core/policy"
+	"github.com/cauteum/cauteum-proxy/proxy"
 )
 
 func TestCONNECTAllowDeny(t *testing.T) {

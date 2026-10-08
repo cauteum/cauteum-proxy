@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/cauteum/cauteum-core/policy"
 )
 
 const defaultJSONRPCMaxBodyBytes = 64 << 10

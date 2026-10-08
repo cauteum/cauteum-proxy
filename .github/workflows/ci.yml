@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 the whaleshell authors
+# SPDX-FileCopyrightText: Copyright (c) 2026 the cauteum authors
 # SPDX-License-Identifier: Apache-2.0
 #
 # gogpu-style CI: format, lint, cross-platform build + test
@@ -24,25 +24,25 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: whaleshell-proxy
+        working-directory: cauteum-proxy
     steps:
 
-      - name: Checkout whaleshell-proxy
+      - name: Checkout cauteum-proxy
         uses: actions/checkout@v4
         with:
-          path: whaleshell-proxy
+          path: cauteum-proxy
 
-      - name: Checkout whaleshell-core
+      - name: Checkout cauteum-core
         uses: actions/checkout@v4
         with:
-          repository: whaleshell/whaleshell-core
-          path: whaleshell-core
+          repository: cauteum/cauteum-core
+          path: cauteum-core
           ref: main
 
       - name: Checkout slogx
         uses: actions/checkout@v4
         with:
-          repository: whaleshell/slogx
+          repository: cauteum/slogx
           path: slogx
       - name: Write go.work
         working-directory: ${{ github.workspace }}
@@ -52,20 +52,20 @@ jobs:
           {
             echo 'go 1.27.0'
             echo 'use ('
-            for d in whaleshell-* slogx; do
+            for d in cauteum-* slogx; do
               if [[ -d "$d" ]]; then
                 echo "  ./$d"
               fi
             done
             echo ')'
             echo 'replace ('
-            for d in whaleshell-*; do
+            for d in cauteum-*; do
               if [[ -d "$d" ]]; then
-                echo "  github.com/whaleshell/${d} v0.1.0-alpha.1 => ./$d"
+                echo "  github.com/cauteum/${d} v0.1.0-alpha.1 => ./$d"
               fi
             done
             if [[ -d slogx ]]; then
-              echo '  github.com/whaleshell/slogx v0.1.0-alpha.1 => ./slogx'
+              echo '  github.com/cauteum/slogx v0.1.0-alpha.1 => ./slogx'
             fi
             echo ')'
           } > "${{ github.workspace }}/go.work"
@@ -76,7 +76,7 @@ jobs:
           go-version: "1.27"
           cache: true
           cache-dependency-path: |
-            whaleshell-*/go.sum
+            cauteum-*/go.sum
             slogx/go.sum
       - name: Check gofmt
         run: |
@@ -94,25 +94,25 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: whaleshell-proxy
+        working-directory: cauteum-proxy
     steps:
 
-      - name: Checkout whaleshell-proxy
+      - name: Checkout cauteum-proxy
         uses: actions/checkout@v4
         with:
-          path: whaleshell-proxy
+          path: cauteum-proxy
 
-      - name: Checkout whaleshell-core
+      - name: Checkout cauteum-core
         uses: actions/checkout@v4
         with:
-          repository: whaleshell/whaleshell-core
-          path: whaleshell-core
+          repository: cauteum/cauteum-core
+          path: cauteum-core
           ref: main
 
       - name: Checkout slogx
         uses: actions/checkout@v4
         with:
-          repository: whaleshell/slogx
+          repository: cauteum/slogx
           path: slogx
       - name: Write go.work
         working-directory: ${{ github.workspace }}
@@ -122,20 +122,20 @@ jobs:
           {
             echo 'go 1.27.0'
             echo 'use ('
-            for d in whaleshell-* slogx; do
+            for d in cauteum-* slogx; do
               if [[ -d "$d" ]]; then
                 echo "  ./$d"
               fi
             done
             echo ')'
             echo 'replace ('
-            for d in whaleshell-*; do
+            for d in cauteum-*; do
               if [[ -d "$d" ]]; then
-                echo "  github.com/whaleshell/${d} v0.1.0-alpha.1 => ./$d"
+                echo "  github.com/cauteum/${d} v0.1.0-alpha.1 => ./$d"
               fi
             done
             if [[ -d slogx ]]; then
-              echo '  github.com/whaleshell/slogx v0.1.0-alpha.1 => ./slogx'
+              echo '  github.com/cauteum/slogx v0.1.0-alpha.1 => ./slogx'
             fi
             echo ')'
           } > "${{ github.workspace }}/go.work"
@@ -146,13 +146,13 @@ jobs:
           go-version: "1.27"
           cache: true
           cache-dependency-path: |
-            whaleshell-*/go.sum
+            cauteum-*/go.sum
             slogx/go.sum
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-          working-directory: whaleshell-proxy
+          working-directory: cauteum-proxy
           args: --timeout=5m
 
   build:
@@ -164,25 +164,25 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     defaults:
       run:
-        working-directory: whaleshell-proxy
+        working-directory: cauteum-proxy
     steps:
 
-      - name: Checkout whaleshell-proxy
+      - name: Checkout cauteum-proxy
         uses: actions/checkout@v4
         with:
-          path: whaleshell-proxy
+          path: cauteum-proxy
 
-      - name: Checkout whaleshell-core
+      - name: Checkout cauteum-core
         uses: actions/checkout@v4
         with:
-          repository: whaleshell/whaleshell-core
-          path: whaleshell-core
+          repository: cauteum/cauteum-core
+          path: cauteum-core
           ref: main
 
       - name: Checkout slogx
         uses: actions/checkout@v4
         with:
-          repository: whaleshell/slogx
+          repository: cauteum/slogx
           path: slogx
       - name: Write go.work
         working-directory: ${{ github.workspace }}
@@ -192,20 +192,20 @@ jobs:
           {
             echo 'go 1.27.0'
             echo 'use ('
-            for d in whaleshell-* slogx; do
+            for d in cauteum-* slogx; do
               if [[ -d "$d" ]]; then
                 echo "  ./$d"
               fi
             done
             echo ')'
             echo 'replace ('
-            for d in whaleshell-*; do
+            for d in cauteum-*; do
               if [[ -d "$d" ]]; then
-                echo "  github.com/whaleshell/${d} v0.1.0-alpha.1 => ./$d"
+                echo "  github.com/cauteum/${d} v0.1.0-alpha.1 => ./$d"
               fi
             done
             if [[ -d slogx ]]; then
-              echo '  github.com/whaleshell/slogx v0.1.0-alpha.1 => ./slogx'
+              echo '  github.com/cauteum/slogx v0.1.0-alpha.1 => ./slogx'
             fi
             echo ')'
           } > "${{ github.workspace }}/go.work"
@@ -216,7 +216,7 @@ jobs:
           go-version: "1.27"
           cache: true
           cache-dependency-path: |
-            whaleshell-*/go.sum
+            cauteum-*/go.sum
             slogx/go.sum
       - name: Download modules
         run: go mod download
@@ -232,25 +232,25 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     defaults:
       run:
-        working-directory: whaleshell-proxy
+        working-directory: cauteum-proxy
     steps:
 
-      - name: Checkout whaleshell-proxy
+      - name: Checkout cauteum-proxy
         uses: actions/checkout@v4
         with:
-          path: whaleshell-proxy
+          path: cauteum-proxy
 
-      - name: Checkout whaleshell-core
+      - name: Checkout cauteum-core
         uses: actions/checkout@v4
         with:
-          repository: whaleshell/whaleshell-core
-          path: whaleshell-core
+          repository: cauteum/cauteum-core
+          path: cauteum-core
           ref: main
 
       - name: Checkout slogx
         uses: actions/checkout@v4
         with:
-          repository: whaleshell/slogx
+          repository: cauteum/slogx
           path: slogx
       - name: Write go.work
         working-directory: ${{ github.workspace }}
@@ -260,20 +260,20 @@ jobs:
           {
             echo 'go 1.27.0'
             echo 'use ('
-            for d in whaleshell-* slogx; do
+            for d in cauteum-* slogx; do
               if [[ -d "$d" ]]; then
                 echo "  ./$d"
               fi
             done
             echo ')'
             echo 'replace ('
-            for d in whaleshell-*; do
+            for d in cauteum-*; do
               if [[ -d "$d" ]]; then
-                echo "  github.com/whaleshell/${d} v0.1.0-alpha.1 => ./$d"
+                echo "  github.com/cauteum/${d} v0.1.0-alpha.1 => ./$d"
               fi
             done
             if [[ -d slogx ]]; then
-              echo '  github.com/whaleshell/slogx v0.1.0-alpha.1 => ./slogx'
+              echo '  github.com/cauteum/slogx v0.1.0-alpha.1 => ./slogx'
             fi
             echo ')'
           } > "${{ github.workspace }}/go.work"
@@ -284,7 +284,7 @@ jobs:
           go-version: "1.27"
           cache: true
           cache-dependency-path: |
-            whaleshell-*/go.sum
+            cauteum-*/go.sum
             slogx/go.sum
       - name: Download modules
         run: go mod download
@@ -312,7 +312,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           use_oidc: true
-          files: ./whaleshell-proxy/coverage.txt
+          files: ./cauteum-proxy/coverage.txt
           flags: unittests
-          name: codecov-whaleshell-proxy
+          name: codecov-cauteum-proxy
           fail_ci_if_error: false

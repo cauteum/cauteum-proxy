@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/cauteum/cauteum-core/policy"
 )
 
 // WatchPolicy polls path for content changes and calls Apply on the server.
@@ -88,7 +88,7 @@ func (s *Server) reportPolicyStatus(ctx context.Context, revision uint32, loadEr
 }
 
 func policyRevision(raw []byte) uint32 {
-	const prefix = "# whaleshell-policy-revision:"
+	const prefix = "# cauteum-policy-revision:"
 	for _, line := range strings.Split(string(raw), "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, prefix) {

@@ -55,9 +55,9 @@ func TestTokenGrantTLSConfigLoadsGuestMTLSMaterial(t *testing.T) {
 	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("WHALESHELL_GUEST_TLS_CA", caPath)
-	t.Setenv("WHALESHELL_GUEST_TLS_CERT", certPath)
-	t.Setenv("WHALESHELL_GUEST_TLS_KEY", keyPath)
+	t.Setenv("CAUTEUM_GUEST_TLS_CA", caPath)
+	t.Setenv("CAUTEUM_GUEST_TLS_CERT", certPath)
+	t.Setenv("CAUTEUM_GUEST_TLS_KEY", keyPath)
 	cfg, err := tokenGrantTLSConfigFromEnvironment("gateway.test")
 	if err != nil || cfg.ServerName != "gateway.test" || cfg.RootCAs == nil || len(cfg.Certificates) != 1 {
 		t.Fatalf("TLS config=%+v err=%v", cfg, err)
@@ -73,7 +73,7 @@ func TestResolveTokenGrantPlaceholdersUsesEndpointBoundDynamicCredential(t *test
 		return "short-lived-access-token", nil
 	})
 	req := httptest.NewRequest("GET", "https://api.example.com/v1/data", nil)
-	req.Header.Set("Authorization", "Bearer whaleshell:resolve:env:DYNAMIC_TOKEN")
+	req.Header.Set("Authorization", "Bearer cauteum:resolve:env:DYNAMIC_TOKEN")
 	got, err := s.resolveTokenGrantPlaceholders(context.Background(), "api.example.com", 443, "/v1/data", req, []string{"DYNAMIC_TOKEN"}, SecretStore{"STATIC": "static-token"})
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestResolveTokenGrantPlaceholdersRejectsUnboundCredentialBeforeExchange(t *
 		return "token", nil
 	})}
 	req := httptest.NewRequest("GET", "https://api.example.com/v1/data", nil)
-	req.Header.Set("Authorization", "Bearer whaleshell:resolve:env:DYNAMIC_TOKEN")
+	req.Header.Set("Authorization", "Bearer cauteum:resolve:env:DYNAMIC_TOKEN")
 	_, err := s.resolveTokenGrantPlaceholders(context.Background(), "api.example.com", 443, "/v1/data", req, nil, nil)
 	if err == nil || called {
 		t.Fatalf("err=%v resolver_called=%v", err, called)
@@ -110,7 +110,7 @@ func TestSPIFFETokenGrantResolverExpiresCachedToken(t *testing.T) {
 	target := TokenGrantTarget{Host: "api.example.com", Port: 443, Path: "/v1/data"}
 	key := strings.Join([]string{grant.Provider, grant.CredentialKey, grant.TokenEndpoint, "client_credentials", "", "", target.Host, "443", target.Path}, "\x00")
 	resolver.cache[key] = cachedGrantToken{value: "cached-access-token", expires: now.Add(time.Minute)}
-	t.Setenv("WHALESHELL_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET", "")
+	t.Setenv("CAUTEUM_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET", "")
 
 	got, err := resolver.ResolveTokenGrant(context.Background(), grant, target)
 	if err != nil || got != "cached-access-token" {
@@ -225,7 +225,7 @@ func testSPIFFETokenGrantResolverUsesWorkloadSVIDAndRefreshesAfterExpiry(t *test
 
 	// Do not let an inherited upstream spelling change which socket is tested.
 	t.Setenv("OPENSHELL_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET", "")
-	t.Setenv("WHALESHELL_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET", socket)
+	t.Setenv("CAUTEUM_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET", socket)
 	resolver := NewSPIFFETokenGrantResolver()
 	now := time.Unix(1_700_000_000, 0)
 	resolver.Now = func() time.Time { return now }

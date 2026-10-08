@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2026 whaleshell
+// SPDX-FileCopyrightText: Copyright (c) 2026 cauteum
 // SPDX-License-Identifier: Apache-2.0
 
 package proxy
@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/cauteum/cauteum-core/policy"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,7 +33,7 @@ const (
 	policyLocalWaitDefault   = 60
 	policyLocalWaitMin       = 1
 	policyLocalWaitMax       = 300
-	policyLocalAgentGuidance = "whaleshell blocked this request with sandbox policy. If the user task still needs this network action, read /etc/whaleshell/skills/policy_advisor.md, submit the narrowest proposal to http://policy.local/v1/proposals, wait for approval with policy_reloaded: true, then retry."
+	policyLocalAgentGuidance = "cauteum blocked this request with sandbox policy. If the user task still needs this network action, read /etc/cauteum/skills/policy_advisor.md, submit the narrowest proposal to http://policy.local/v1/proposals, wait for approval with policy_reloaded: true, then retry."
 )
 
 type denialLine struct {
@@ -59,7 +59,7 @@ type localProposal struct {
 
 func (s *Server) isPolicyLocal(host string) bool {
 	h := strings.ToLower(strings.TrimSpace(host))
-	return h == PolicyLocalHost || h == "policy.whaleshell.local"
+	return h == PolicyLocalHost || h == "policy.cauteum.local"
 }
 
 func (s *Server) recordDenial(line string) {
@@ -187,7 +187,7 @@ func (s *Server) policyLocalSubmit(w io.Writer, body []byte) {
 			rejected = append(rejected, map[string]string{"error": err.Error()})
 			continue
 		}
-		p.Sandbox = strings.TrimSpace(os.Getenv("WHALESHELL_SANDBOX"))
+		p.Sandbox = strings.TrimSpace(os.Getenv("CAUTEUM_SANDBOX"))
 		if err := s.persistProposal(p); err != nil {
 			rejected = append(rejected, map[string]string{"error": err.Error()})
 			continue
@@ -311,8 +311,8 @@ func (s *Server) persistProposal(p *localProposal) error {
 	s.proposals[p.ID] = p
 	s.mu.Unlock()
 
-	gw := strings.TrimSpace(os.Getenv("WHALESHELL_GATEWAY_URL"))
-	sb := strings.TrimSpace(os.Getenv("WHALESHELL_SANDBOX"))
+	gw := strings.TrimSpace(os.Getenv("CAUTEUM_GATEWAY_URL"))
+	sb := strings.TrimSpace(os.Getenv("CAUTEUM_SANDBOX"))
 	if gw == "" || sb == "" {
 		return nil
 	}
@@ -451,8 +451,8 @@ func (s *Server) lookupProposal(id string) *localProposal {
 }
 
 func (s *Server) refreshProposalFromGateway(id string) {
-	gw := strings.TrimSpace(os.Getenv("WHALESHELL_GATEWAY_URL"))
-	sb := strings.TrimSpace(os.Getenv("WHALESHELL_SANDBOX"))
+	gw := strings.TrimSpace(os.Getenv("CAUTEUM_GATEWAY_URL"))
+	sb := strings.TrimSpace(os.Getenv("CAUTEUM_SANDBOX"))
 	if gw == "" || sb == "" || id == "" {
 		return
 	}

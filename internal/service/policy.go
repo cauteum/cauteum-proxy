@@ -4,7 +4,7 @@ package service
 import (
 	"context"
 
-	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/cauteum/cauteum-core/policy"
 )
 
 // PolicySource loads the active egress policy document.

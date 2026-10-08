@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/whaleshell/whaleshell-core/env"
+	"github.com/cauteum/cauteum-core/env"
 )
 
 // SecretStore maps env key to secret value for placeholder rewrite.
@@ -36,7 +36,7 @@ func FilterSecrets(secrets SecretStore, allowed []string) SecretStore {
 // endpoint that does not bind that credential key (OpenShell credential_endpoint_mismatch).
 var ErrCredentialEndpointMismatch = fmt.Errorf("credential_endpoint_mismatch")
 
-// PlaceholderKeysInRequest lists env keys referenced by whaleshell:/openshell:resolve:env markers
+// PlaceholderKeysInRequest lists env keys referenced by cauteum:/openshell:resolve:env markers
 // in path, query, and headers (including Basic).
 func PlaceholderKeysInRequest(req *http.Request) []string {
 	if req == nil {
@@ -132,8 +132,8 @@ func SecretsForEndpoint(secrets SecretStore, boundKeys, usedKeys []string) (Secr
 // controlPlaneKeys are gateway credentials of the sidecar itself; a sandbox
 // placeholder must never resolve them into outbound traffic.
 var controlPlaneKeys = map[string]struct{}{
-	"WHALESHELL_SANDBOX_TOKEN": {},
-	"WHALESHELL_GATEWAY_TOKEN": {},
+	"CAUTEUM_SANDBOX_TOKEN": {},
+	"CAUTEUM_GATEWAY_TOKEN": {},
 }
 
 // LoadSecretsFromEnviron builds a store from KEY=VAL entries (skips passthrough
@@ -338,7 +338,7 @@ func rewriteHeaderValue(value string, secrets SecretStore) (string, error) {
 	if secret, ok := resolveExact(trimmed, secrets); ok {
 		return secret, nil
 	}
-	// Prefixed: Bearer whaleshell:resolve:env:KEY
+	// Prefixed: Bearer cauteum:resolve:env:KEY
 	if i := strings.IndexFunc(trimmed, func(r rune) bool { return r == ' ' || r == '\t' }); i > 0 {
 		prefix := trimmed[:i]
 		cand := strings.TrimSpace(trimmed[i:])

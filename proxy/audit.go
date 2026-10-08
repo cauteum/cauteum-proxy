@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/whaleshell/slogx"
+	"github.com/cauteum/slogx"
 )
 
 // auditEvent is an internal security / lifecycle decision from the proxy.

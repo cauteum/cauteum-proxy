@@ -27,7 +27,7 @@ type noProxyEntry struct {
 // noProxyAddresses implements the OpenShell upstream-proxy bypass grammar:
 // wildcard, domain suffix, IP/CIDR and optional port. The caller passes only
 // addresses already resolved and approved by the SSRF policy, so bypassing a
-// corporate proxy cannot bypass Whaleshell's destination policy.
+// corporate proxy cannot bypass Cauteum's destination policy.
 func noProxyAddresses(host string, port uint16, raw string, resolved []netip.Addr) []netip.Addr {
 	entries := parseNoProxy(raw)
 	canonicalHost := strings.TrimSuffix(strings.ToLower(strings.Trim(strings.TrimSpace(host), "[]")), ".")

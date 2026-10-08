@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/cauteum/cauteum-core/policy"
 )
 
 // parseMCPRequest extracts JSON-RPC method and optional tools/call name from an HTTP body.

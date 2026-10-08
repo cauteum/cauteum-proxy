@@ -1,6 +1,6 @@
-# Roadmap — whaleshell-proxy
+# Roadmap — cauteum-proxy
 
-Status: **v0.1.0-alpha.1** (alpha) · Depends on [whaleshell-core](https://github.com/whaleshell/whaleshell-core) `v0.1.0-alpha.1`
+Status: **v0.1.0-alpha.1** (alpha) · Depends on [cauteum-core](https://github.com/cauteum/cauteum-core) `v0.1.0-alpha.1`
 
 ## This module
 
@@ -13,4 +13,4 @@ Status: **v0.1.0-alpha.1** (alpha) · Depends on [whaleshell-core](https://githu
 
 ## Release
 
-Requires whaleshell-core `v0.1.0-alpha.1` · tagged after core in the cascade.
+Requires cauteum-core `v0.1.0-alpha.1` · tagged after core in the cascade.

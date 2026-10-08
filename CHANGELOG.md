@@ -8,7 +8,7 @@
 
 ### Changed
 
-- Use `whaleshell-core` v0.1.0-beta.1.
+- Use `cauteum-core` v0.1.0-beta.1.
 
 ### Fixed
 

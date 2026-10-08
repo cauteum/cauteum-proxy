@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/whaleshell/whaleshell-core/defaults"
+	"github.com/cauteum/cauteum-core/defaults"
 )
 
 type ctxKeyConn struct{}

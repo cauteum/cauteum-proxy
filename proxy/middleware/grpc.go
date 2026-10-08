@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	middlewarev1 "github.com/whaleshell/whaleshell-core/upstreamproto/middlewarev1"
+	middlewarev1 "github.com/cauteum/cauteum-core/upstreamproto/middlewarev1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"

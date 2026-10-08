@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whaleshell/whaleshell-core/engine"
-	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/cauteum/cauteum-core/engine"
+	"github.com/cauteum/cauteum-core/policy"
 )
 
 func TestWatchPolicyReload(t *testing.T) {
@@ -80,7 +80,7 @@ network_policies:
 func TestWatchPolicyReportsAppliedRevision(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.yaml")
-	body := []byte(`# whaleshell-policy-revision: 7
+	body := []byte(`# cauteum-policy-revision: 7
 version: 1
 network_policies:
   api:
@@ -125,7 +125,7 @@ network_policies:
 func TestWatchPolicyAcknowledgementFailureFailsClosed(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.yaml")
-	body := []byte(`# whaleshell-policy-revision: 9
+	body := []byte(`# cauteum-policy-revision: 9
 version: 1
 network_policies:
   api:

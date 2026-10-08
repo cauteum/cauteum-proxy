@@ -18,7 +18,7 @@ import (
 // InferenceLocalHost is the OpenShell privacy-router hostname.
 const InferenceLocalHost = "inference.local"
 
-// InferenceConfig is loaded from WHALESHELL_INFERENCE_* env (sidecar).
+// InferenceConfig is loaded from CAUTEUM_INFERENCE_* env (sidecar).
 type InferenceConfig struct {
 	Upstream   string // e.g. https://integrate.api.nvidia.com
 	Model      string
@@ -26,8 +26,8 @@ type InferenceConfig struct {
 	APIKey     string // raw secret for upstream Authorization
 }
 
-// LoadInferenceFromEnviron reads WHALESHELL_INFERENCE_UPSTREAM, WHALESHELL_INFERENCE_MODEL,
-// WHALESHELL_INFERENCE_TIMEOUT, WHALESHELL_INFERENCE_API_KEY.
+// LoadInferenceFromEnviron reads CAUTEUM_INFERENCE_UPSTREAM, CAUTEUM_INFERENCE_MODEL,
+// CAUTEUM_INFERENCE_TIMEOUT, CAUTEUM_INFERENCE_API_KEY.
 func LoadInferenceFromEnviron(environ []string) InferenceConfig {
 	cfg := InferenceConfig{TimeoutSec: 60}
 	for _, e := range environ {
@@ -36,20 +36,20 @@ func LoadInferenceFromEnviron(environ []string) InferenceConfig {
 			continue
 		}
 		switch k {
-		case "WHALESHELL_INFERENCE_UPSTREAM":
+		case "CAUTEUM_INFERENCE_UPSTREAM":
 			cfg.Upstream = strings.TrimRight(v, "/")
-		case "WHALESHELL_INFERENCE_MODEL":
+		case "CAUTEUM_INFERENCE_MODEL":
 			cfg.Model = v
-		case "WHALESHELL_INFERENCE_TIMEOUT":
+		case "CAUTEUM_INFERENCE_TIMEOUT":
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
 				cfg.TimeoutSec = n
 			}
-		case "WHALESHELL_INFERENCE_API_KEY":
+		case "CAUTEUM_INFERENCE_API_KEY":
 			cfg.APIKey = v
 		}
 	}
 	if cfg.Upstream == "" {
-		cfg.Upstream = strings.TrimRight(os.Getenv("WHALESHELL_INFERENCE_UPSTREAM"), "/")
+		cfg.Upstream = strings.TrimRight(os.Getenv("CAUTEUM_INFERENCE_UPSTREAM"), "/")
 	}
 	return cfg
 }
@@ -74,7 +74,7 @@ func (s *Server) mitmHandshake(client net.Conn, host string) (*tls.Conn, error) 
 
 func (s *Server) isInferenceLocal(host string) bool {
 	h := strings.ToLower(strings.TrimSpace(host))
-	return h == InferenceLocalHost || h == "inference.whaleshell.local"
+	return h == InferenceLocalHost || h == "inference.cauteum.local"
 }
 
 // handleInferenceLocal terminates CONNECT and reverse-proxies to the configured upstream.

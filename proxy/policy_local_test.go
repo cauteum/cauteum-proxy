@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2026 whaleshell
+// SPDX-FileCopyrightText: Copyright (c) 2026 cauteum
 // SPDX-License-Identifier: Apache-2.0
 
 package proxy
@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whaleshell/whaleshell-core/engine"
-	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/cauteum/cauteum-core/engine"
+	"github.com/cauteum/cauteum-core/policy"
 )
 
 func TestServePolicyLocalRoutes(t *testing.T) {

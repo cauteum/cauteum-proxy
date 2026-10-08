@@ -4,8 +4,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/whaleshell/whaleshell-core/engine"
-	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/cauteum/cauteum-core/engine"
+	"github.com/cauteum/cauteum-core/policy"
 )
 
 func TestCanonicalizeL7Path(t *testing.T) {

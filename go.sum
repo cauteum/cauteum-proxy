@@ -31,10 +31,10 @@ github.com/spiffe/go-spiffe/v2 v2.9.0 h1:g5qTg3qIP1HXV+GzuyEfSJFVxUCpEP5Ui1OINVJ
 github.com/spiffe/go-spiffe/v2 v2.9.0/go.mod h1:w2CLWKLMTX/PPYUEUPv3ltH0RXsw5S8suwNF46w9/Aw=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
-github.com/whaleshell/slogx v0.1.0-alpha.2 h1:23j+6y9uP4ycf8Hf26SCaXwvYANXDNMPIt+4oJWNlLs=
-github.com/whaleshell/slogx v0.1.0-alpha.2/go.mod h1:fGG53lX/w0fWs/Uu+ucKA3GoAO/qoHe8L+gIYSU8azY=
-github.com/whaleshell/whaleshell-core v0.1.0-beta.1 h1:cv0jdhUE5flcdczKoYR01g3WFOvYDZKJTUihSnEzipM=
-github.com/whaleshell/whaleshell-core v0.1.0-beta.1/go.mod h1:MQx5n7RmvA+sGkwJ2HaPrEdYOmVNDGimx1EpO/tqBww=
+github.com/cauteum/slogx v0.1.0-alpha.2 h1:23j+6y9uP4ycf8Hf26SCaXwvYANXDNMPIt+4oJWNlLs=
+github.com/cauteum/slogx v0.1.0-alpha.2/go.mod h1:fGG53lX/w0fWs/Uu+ucKA3GoAO/qoHe8L+gIYSU8azY=
+github.com/cauteum/cauteum-core v0.1.0-beta.1 h1:cv0jdhUE5flcdczKoYR01g3WFOvYDZKJTUihSnEzipM=
+github.com/cauteum/cauteum-core v0.1.0-beta.1/go.mod h1:MQx5n7RmvA+sGkwJ2HaPrEdYOmVNDGimx1EpO/tqBww=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/otel v1.47.0 h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM=

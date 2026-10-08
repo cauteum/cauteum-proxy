@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/whaleshell/slogx"
+	"github.com/cauteum/slogx"
 )
 
 // AuditLine is one OCSF/observation line pushed to a gateway log sink.
@@ -142,7 +142,7 @@ func (m *MultiAudit) rotateFileLocked() error {
 	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
 		return err
 	}
-	path := filepath.Join(m.logDir, "whaleshell."+day+".log")
+	path := filepath.Join(m.logDir, "cauteum."+day+".log")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func (m *MultiAudit) rotateFileLocked() error {
 	ents, _ := os.ReadDir(m.logDir)
 	var logs []string
 	for _, e := range ents {
-		if strings.HasPrefix(e.Name(), "whaleshell.") && strings.HasSuffix(e.Name(), ".log") {
+		if strings.HasPrefix(e.Name(), "cauteum.") && strings.HasSuffix(e.Name(), ".log") {
 			logs = append(logs, e.Name())
 		}
 	}

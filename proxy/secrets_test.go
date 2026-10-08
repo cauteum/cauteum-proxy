@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/whaleshell/whaleshell-core/env"
-	"github.com/whaleshell/whaleshell-proxy/proxy"
+	"github.com/cauteum/cauteum-core/env"
+	"github.com/cauteum/cauteum-proxy/proxy"
 )
 
 func TestRewriteHeaderQueryPathBasic(t *testing.T) {
@@ -179,7 +179,7 @@ func TestCredentialEndpointMismatch(t *testing.T) {
 }
 
 func TestCredentialKeysSurviveYAML(t *testing.T) {
-	// covered in whaleshell-core; smoke here via FilterSecrets empty semantics
+	// covered in cauteum-core; smoke here via FilterSecrets empty semantics
 	if len(proxy.FilterSecrets(proxy.SecretStore{"A": "1"}, nil)) != 0 {
 		t.Fatal("empty bound keys must yield empty store")
 	}
@@ -196,13 +196,13 @@ func stringsTrimBasic(v string) string {
 func TestLoadSecretsFromEnvironSkipsControlPlaneTokens(t *testing.T) {
 	store := proxy.LoadSecretsFromEnviron([]string{
 		"OPENAI_API_KEY=sk-real",
-		"WHALESHELL_SANDBOX_TOKEN=supervisor-secret",
-		"WHALESHELL_GATEWAY_TOKEN=operator-secret",
+		"CAUTEUM_SANDBOX_TOKEN=supervisor-secret",
+		"CAUTEUM_GATEWAY_TOKEN=operator-secret",
 	})
 	if store["OPENAI_API_KEY"] != "sk-real" {
 		t.Fatalf("credential missing: %v", store)
 	}
-	for _, k := range []string{"WHALESHELL_SANDBOX_TOKEN", "WHALESHELL_GATEWAY_TOKEN"} {
+	for _, k := range []string{"CAUTEUM_SANDBOX_TOKEN", "CAUTEUM_GATEWAY_TOKEN"} {
 		if _, ok := store[k]; ok {
 			t.Fatalf("%s must never be resolvable by sandbox placeholders", k)
 		}

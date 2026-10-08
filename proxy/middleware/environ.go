@@ -12,11 +12,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// FromEnviron builds an optional pipeline from WHALESHELL_MIDDLEWARE_* env vars.
+// FromEnviron builds an optional pipeline from CAUTEUM_MIDDLEWARE_* env vars.
 //
-//	WHALESHELL_MIDDLEWARE_JWT_AUD      — removed; setting it denies requests
-//	WHALESHELL_MIDDLEWARE_JWT_REQUIRED — removed; setting it denies requests
-//	WHALESHELL_MIDDLEWARE_REMOTE_URL   — POST Decision JSON stage (fail-closed)
+//	CAUTEUM_MIDDLEWARE_JWT_AUD      — removed; setting it denies requests
+//	CAUTEUM_MIDDLEWARE_JWT_REQUIRED — removed; setting it denies requests
+//	CAUTEUM_MIDDLEWARE_REMOTE_URL   — POST Decision JSON stage (fail-closed)
 func FromEnviron(environ []string) *Pipeline {
 	if environ == nil {
 		environ = os.Environ()
@@ -29,18 +29,18 @@ func FromEnviron(environ []string) *Pipeline {
 		}
 	}
 	var stages []Stage
-	aud := strings.TrimSpace(env["WHALESHELL_MIDDLEWARE_JWT_AUD"])
-	jwtRequired := strings.TrimSpace(env["WHALESHELL_MIDDLEWARE_JWT_REQUIRED"])
+	aud := strings.TrimSpace(env["CAUTEUM_MIDDLEWARE_JWT_AUD"])
+	jwtRequired := strings.TrimSpace(env["CAUTEUM_MIDDLEWARE_JWT_REQUIRED"])
 	if aud != "" || jwtRequired != "" && !strings.EqualFold(jwtRequired, "false") && jwtRequired != "0" {
 		stages = append(stages, &rejectedConfigStage{
 			Label:  "removed_jwt_env",
 			Reason: "JWT middleware environment configuration was removed; refusing request",
 		})
 	}
-	if u := strings.TrimSpace(env["WHALESHELL_MIDDLEWARE_REMOTE_URL"]); u != "" {
+	if u := strings.TrimSpace(env["CAUTEUM_MIDDLEWARE_REMOTE_URL"]); u != "" {
 		stages = append(stages, &remoteStage{URL: u, FailClosed: true, Label: "remote_env"})
 	}
-	if raw := strings.TrimSpace(env["WHALESHELL_SUPERVISOR_MIDDLEWARES"]); raw != "" {
+	if raw := strings.TrimSpace(env["CAUTEUM_SUPERVISOR_MIDDLEWARES"]); raw != "" {
 		var configured []grpcMiddlewareConfig
 		if err := json.Unmarshal([]byte(raw), &configured); err != nil {
 			stages = append(stages, &rejectedConfigStage{Label: "supervisor_middleware_config", Reason: "invalid supervisor middleware configuration"})

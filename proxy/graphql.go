@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/whaleshell/whaleshell-core/policy"
+	"github.com/cauteum/cauteum-core/policy"
 )
 
 const defaultGraphQLMaxBodyBytes = 64 << 10
