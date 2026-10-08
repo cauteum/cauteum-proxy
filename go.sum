@@ -2,6 +2,10 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/NVIDIA/OpenShell/sdk/go v0.0.0-20260909233434-a0814443f19c h1:UPhoAjInjoFIAkCBEFKrFi7mAc6EBrZJl8+bo9D/0Bg=
 github.com/NVIDIA/OpenShell/sdk/go v0.0.0-20260909233434-a0814443f19c/go.mod h1:zdG7v32UKU9U/zMxJ5F/nFRtUOpCUf0R6yu7k+adbxo=
+github.com/cauteum/cauteum-core v0.1.0-beta.1.0.20261008213715-9b32ff965bef h1:AZMkFLGHQKRVzVDNqkeKClP87du39xuQML2gyrt9Zh0=
+github.com/cauteum/cauteum-core v0.1.0-beta.1.0.20261008213715-9b32ff965bef/go.mod h1:r3Cz9AedbxCZREqVYIrvH82TrwoF/Uw3aZqYj7QSFGM=
+github.com/cauteum/slogx v0.1.0-alpha.2.0.20261008213740-b3c4da34847b h1:KKZ64vYzbQowRuek7QKoOQrLZ+KCDMortOWwDbSb8lg=
+github.com/cauteum/slogx v0.1.0-alpha.2.0.20261008213740-b3c4da34847b/go.mod h1:8sEfgboLQyul1bHQXrihFNK3tVZ2fAlcc/eKb0DDwW0=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
@@ -31,10 +35,6 @@ github.com/spiffe/go-spiffe/v2 v2.9.0 h1:g5qTg3qIP1HXV+GzuyEfSJFVxUCpEP5Ui1OINVJ
 github.com/spiffe/go-spiffe/v2 v2.9.0/go.mod h1:w2CLWKLMTX/PPYUEUPv3ltH0RXsw5S8suwNF46w9/Aw=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
-github.com/cauteum/slogx v0.1.0-alpha.2 h1:23j+6y9uP4ycf8Hf26SCaXwvYANXDNMPIt+4oJWNlLs=
-github.com/cauteum/slogx v0.1.0-alpha.2/go.mod h1:fGG53lX/w0fWs/Uu+ucKA3GoAO/qoHe8L+gIYSU8azY=
-github.com/cauteum/cauteum-core v0.1.0-beta.1 h1:cv0jdhUE5flcdczKoYR01g3WFOvYDZKJTUihSnEzipM=
-github.com/cauteum/cauteum-core v0.1.0-beta.1/go.mod h1:MQx5n7RmvA+sGkwJ2HaPrEdYOmVNDGimx1EpO/tqBww=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/otel v1.47.0 h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM=
