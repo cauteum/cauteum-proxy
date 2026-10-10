@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cauteum-haven/cauteum-core/env"
-	"github.com/cauteum-haven/cauteum-proxy/proxy"
+	"github.com/cautem/cauteum-core/env"
+	"github.com/cautem/cauteum-proxy/proxy"
 )
 
 func TestRewriteHeaderQueryPathBasic(t *testing.T) {

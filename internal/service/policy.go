@@ -4,7 +4,7 @@ package service
 import (
 	"context"
 
-	"github.com/cauteum-haven/cauteum-core/policy"
+	"github.com/cautem/cauteum-core/policy"
 )
 
 // PolicySource loads the active egress policy document.

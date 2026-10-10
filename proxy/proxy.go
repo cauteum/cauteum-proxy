@@ -19,11 +19,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cauteum-haven/cauteum-core"
-	"github.com/cauteum-haven/cauteum-core/engine"
-	"github.com/cauteum-haven/cauteum-core/policy"
-	"github.com/cauteum-haven/cauteum-proxy/proxy/middleware"
-	"github.com/cauteum-haven/slogx"
+	"github.com/cautem/cauteum-core"
+	"github.com/cautem/cauteum-core/engine"
+	"github.com/cautem/cauteum-core/policy"
+	"github.com/cautem/cauteum-proxy/proxy/middleware"
+	"github.com/cautem/slogx"
 )
 
 // EgressProxy applies policy and serves egress for a sandbox network.

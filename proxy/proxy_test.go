@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cauteum-haven/cauteum-core/engine"
-	"github.com/cauteum-haven/cauteum-core/policy"
-	"github.com/cauteum-haven/cauteum-proxy/proxy"
+	"github.com/cautem/cauteum-core/engine"
+	"github.com/cautem/cauteum-core/policy"
+	"github.com/cautem/cauteum-proxy/proxy"
 )
 
 func TestCONNECTAllowDeny(t *testing.T) {

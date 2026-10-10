@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cauteum-haven/cauteum-core/engine"
-	"github.com/cauteum-haven/cauteum-core/policy"
+	"github.com/cautem/cauteum-core/engine"
+	"github.com/cautem/cauteum-core/policy"
 )
 
 func TestServePolicyLocalRoutes(t *testing.T) {

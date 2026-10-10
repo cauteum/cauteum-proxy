@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cauteum-haven/cauteum-core/policy"
+	"github.com/cautem/cauteum-core/policy"
 )
 
 // WatchPolicy polls path for content changes and calls Apply on the server.

@@ -3,7 +3,7 @@ package proxy
 import (
 	"io"
 
-	"github.com/cauteum-haven/cauteum-core/engine"
+	"github.com/cautem/cauteum-core/engine"
 )
 
 // NewServerForTests enables loopback only in test binaries.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cauteum-haven/cauteum-proxy/proxy/middleware"
+	"github.com/cautem/cauteum-proxy/proxy/middleware"
 )
 
 func TestFromEnviron(t *testing.T) {
