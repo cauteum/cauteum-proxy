@@ -13,6 +13,7 @@
 ### Changed
 
 - Complete the Cauteum rebrand and align CI with Go 1.27.2.
+- Resolve `cauteum-core` v0.1.0-beta.2 and `slogx` v0.1.0-beta.1 from published tags.
 
 ## [v0.1.0-beta.1] - 2026-10-07
 

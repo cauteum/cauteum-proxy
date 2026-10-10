@@ -6,8 +6,8 @@ toolchain go1.27.2
 
 require (
 	github.com/NVIDIA/OpenShell/sdk/go v0.0.0-20260909233434-a0814443f19c
-	github.com/cauteum/cauteum-core v0.1.0-beta.1.0.20261008213715-9b32ff965bef
-	github.com/cauteum/slogx v0.1.0-alpha.2.0.20261008213740-b3c4da34847b
+	github.com/cauteum/cauteum-core v0.1.0-beta.2
+	github.com/cauteum/slogx v0.1.0-beta.1
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/spiffe/go-spiffe/v2 v2.9.0
 	google.golang.org/grpc v1.84.0

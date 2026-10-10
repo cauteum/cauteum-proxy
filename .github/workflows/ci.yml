@@ -37,7 +37,7 @@ jobs:
         with:
           repository: cauteum/cauteum-core
           path: cauteum-core
-          ref: 9b32ff965beffcaadaa6361630b9d821370a564c
+          ref: 04b92bca8bf1a7c0a5db179671431a093bfa8d1e
 
       - name: Checkout slogx
         uses: actions/checkout@v4
@@ -107,7 +107,7 @@ jobs:
         with:
           repository: cauteum/cauteum-core
           path: cauteum-core
-          ref: 9b32ff965beffcaadaa6361630b9d821370a564c
+          ref: 04b92bca8bf1a7c0a5db179671431a093bfa8d1e
 
       - name: Checkout slogx
         uses: actions/checkout@v4
@@ -177,7 +177,7 @@ jobs:
         with:
           repository: cauteum/cauteum-core
           path: cauteum-core
-          ref: 9b32ff965beffcaadaa6361630b9d821370a564c
+          ref: 04b92bca8bf1a7c0a5db179671431a093bfa8d1e
 
       - name: Checkout slogx
         uses: actions/checkout@v4
@@ -245,7 +245,7 @@ jobs:
         with:
           repository: cauteum/cauteum-core
           path: cauteum-core
-          ref: 9b32ff965beffcaadaa6361630b9d821370a564c
+          ref: 04b92bca8bf1a7c0a5db179671431a093bfa8d1e
 
       - name: Checkout slogx
         uses: actions/checkout@v4
