@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cauteum/slogx"
+	"github.com/cauteum-haven/slogx"
 )
 
 // AuditLine is one OCSF/observation line pushed to a gateway log sink.

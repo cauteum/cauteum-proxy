@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/cauteum/cauteum-core/env"
+	"github.com/cauteum-haven/cauteum-core/env"
 )
 
 // SecretStore maps env key to secret value for placeholder rewrite.

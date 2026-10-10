@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cauteum/cauteum-core/engine"
-	"github.com/cauteum/cauteum-core/policy"
+	"github.com/cauteum-haven/cauteum-core/engine"
+	"github.com/cauteum-haven/cauteum-core/policy"
 )
 
 func TestWatchPolicyReload(t *testing.T) {

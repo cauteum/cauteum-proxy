@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	middlewarev1 "github.com/cauteum/cauteum-core/upstreamproto/middlewarev1"
+	middlewarev1 "github.com/cauteum-haven/cauteum-core/upstreamproto/middlewarev1"
 	"google.golang.org/grpc"
 )
 

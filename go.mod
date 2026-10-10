@@ -1,4 +1,4 @@
-module github.com/cauteum/cauteum-proxy
+module github.com/cauteum-haven/cauteum-proxy
 
 go 1.27.0
 
@@ -6,8 +6,8 @@ toolchain go1.27.2
 
 require (
 	github.com/NVIDIA/OpenShell/sdk/go v0.0.0-20260909233434-a0814443f19c
-	github.com/cauteum/cauteum-core v0.1.0-beta.2
-	github.com/cauteum/slogx v0.1.0-beta.1
+	github.com/cauteum-haven/cauteum-core v0.1.2
+	github.com/cauteum-haven/slogx v0.1.2
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/spiffe/go-spiffe/v2 v2.9.0
 	google.golang.org/grpc v1.84.0

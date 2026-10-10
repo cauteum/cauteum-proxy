@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cauteum/cauteum-core/engine"
-	"github.com/cauteum/cauteum-core/policy"
+	"github.com/cauteum-haven/cauteum-core/engine"
+	"github.com/cauteum-haven/cauteum-core/policy"
 )
 
 func TestParseJSONRPCRequestValidatesAndExtractsBatchMethods(t *testing.T) {
