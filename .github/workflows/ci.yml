@@ -37,7 +37,7 @@ jobs:
         with:
           repository: cautem/cautem-core
           path: cautem-core
-          ref: v0.1.6
+          ref: 91a83675f9cf80887fdc652b6031ee863bbd7f55
 
       - name: Checkout slogx
         uses: actions/checkout@v4
@@ -109,7 +109,7 @@ jobs:
         with:
           repository: cautem/cautem-core
           path: cautem-core
-          ref: v0.1.6
+          ref: 91a83675f9cf80887fdc652b6031ee863bbd7f55
 
       - name: Checkout slogx
         uses: actions/checkout@v4
@@ -181,7 +181,7 @@ jobs:
         with:
           repository: cautem/cautem-core
           path: cautem-core
-          ref: v0.1.6
+          ref: 91a83675f9cf80887fdc652b6031ee863bbd7f55
 
       - name: Checkout slogx
         uses: actions/checkout@v4
@@ -251,7 +251,7 @@ jobs:
         with:
           repository: cautem/cautem-core
           path: cautem-core
-          ref: v0.1.6
+          ref: 91a83675f9cf80887fdc652b6031ee863bbd7f55
 
       - name: Checkout slogx
         uses: actions/checkout@v4
