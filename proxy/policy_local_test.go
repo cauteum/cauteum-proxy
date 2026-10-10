@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2026 cauteum
+// SPDX-FileCopyrightText: Copyright (c) 2026 cautem
 // SPDX-License-Identifier: Apache-2.0
 
 package proxy
@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cautem/cauteum-core/engine"
-	"github.com/cautem/cauteum-core/policy"
+	"github.com/cautem/cautem-core/engine"
+	"github.com/cautem/cautem-core/policy"
 )
 
 func TestServePolicyLocalRoutes(t *testing.T) {

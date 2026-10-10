@@ -19,10 +19,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cautem/cauteum-core"
-	"github.com/cautem/cauteum-core/engine"
-	"github.com/cautem/cauteum-core/policy"
-	"github.com/cautem/cauteum-proxy/proxy/middleware"
+	"github.com/cautem/cautem-core"
+	"github.com/cautem/cautem-core/engine"
+	"github.com/cautem/cautem-core/policy"
+	"github.com/cautem/cautem-proxy/proxy/middleware"
 	"github.com/cautem/slogx"
 )
 
@@ -94,7 +94,7 @@ func NewServer(eng engine.PolicyEngine, audit io.Writer) *Server {
 	if len(srv.tokenGrants) > 0 {
 		srv.tokenGrantResolver = NewSPIFFETokenGrantResolver()
 	}
-	if caPath := strings.TrimSpace(os.Getenv("CAUTEUM_EGRESS_CA_BUNDLE")); caPath != "" {
+	if caPath := strings.TrimSpace(os.Getenv("CAUTEM_EGRESS_CA_BUNDLE")); caPath != "" {
 		roots, err := x509.SystemCertPool()
 		if err != nil || roots == nil {
 			srv.configErr = fmt.Errorf("system certificate roots are unavailable")
@@ -368,7 +368,7 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if !dec.Allow {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("cauteum-proxy: denied\n"))
+		_, _ = w.Write([]byte("cautem-proxy: denied\n"))
 		s.logAudit(auditEvent{
 			Action: "deny", Host: host, Port: port, Reason: dec.Reason, Allow: false,
 			Method: r.Method, Path: pathOnly, Binary: bin,
@@ -384,7 +384,7 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.runMiddleware(r.Context(), r, "http", host, port, pathOnly); err != nil {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("cauteum-proxy: middleware denied\n"))
+		_, _ = w.Write([]byte("cautem-proxy: middleware denied\n"))
 		s.logAudit(auditEvent{
 			Action: "deny", Host: host, Port: port, Reason: err.Error(), Allow: false,
 			Method: r.Method, Path: pathOnly, Binary: bin,
@@ -400,14 +400,14 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 	secrets, err = s.resolveTokenGrantPlaceholders(r.Context(), host, port, pathOnly, r, bound, secrets)
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("cauteum-proxy: token grant failed\n"))
+		_, _ = w.Write([]byte("cautem-proxy: token grant failed\n"))
 		s.logAudit(auditEvent{Action: "deny", Host: host, Port: port, Reason: "token grant failed", Allow: false, Method: r.Method, Path: pathOnly, Binary: bin})
 		return
 	}
 	rewSecrets, err := SecretsForEndpoint(secrets, bound, used)
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("cauteum-proxy: credential_endpoint_mismatch\n"))
+		_, _ = w.Write([]byte("cautem-proxy: credential_endpoint_mismatch\n"))
 		s.logAudit(auditEvent{
 			Action: "deny", Host: host, Port: port, Reason: err.Error(), Allow: false,
 			Method: r.Method, Path: pathOnly, Binary: bin,
@@ -421,7 +421,7 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 	rewriteBody := dec.Matched != nil && dec.Matched.Rule.Protocol == "rest" && dec.Matched.Rule.RequestBodyCredentialRewrite
 	if err := RewriteHTTPRequestWithOptions(r, rewSecrets, rewriteBody); err != nil {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("cauteum-proxy: credential rewrite failed\n"))
+		_, _ = w.Write([]byte("cautem-proxy: credential rewrite failed\n"))
 		s.logAudit(auditEvent{
 			Action: "deny", Host: host, Port: port, Reason: "credential rewrite: " + err.Error(), Allow: false,
 			Method: r.Method, Path: pathOnly, Binary: bin,
@@ -479,7 +479,7 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	if err := s.runMiddlewareResponse(r.Context(), r, host, port, pathOnly, resp); err != nil {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("cauteum-proxy: response middleware denied\n"))
+		_, _ = w.Write([]byte("cautem-proxy: response middleware denied\n"))
 		return
 	}
 	for k, vv := range resp.Header {

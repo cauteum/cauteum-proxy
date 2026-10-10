@@ -152,9 +152,9 @@ func TestDialViaUpstreamProxyUsesAuthFileWithoutEmbeddingSecretInURL(t *testing.
 	t.Setenv("ALL_PROXY", "")
 	t.Setenv("NO_PROXY", "")
 	t.Setenv("no_proxy", "")
-	t.Setenv("CAUTEUM_PROXY_AUTH_FILE", authPath)
-	t.Setenv("CAUTEUM_PROXY_CONNECT_BY_HOSTNAME", "false")
-	t.Setenv("CAUTEUM_PROXY_CA_BUNDLE", "")
+	t.Setenv("CAUTEM_PROXY_AUTH_FILE", authPath)
+	t.Setenv("CAUTEM_PROXY_CONNECT_BY_HOSTNAME", "false")
+	t.Setenv("CAUTEM_PROXY_CA_BUNDLE", "")
 	conn, err := DialSSRF(context.Background(), "api.example.com", "443", SSRFOptions{LookupIPAddr: func(context.Context, string) ([]net.IPAddr, error) {
 		return []net.IPAddr{{IP: net.ParseIP("8.8.8.8")}}, nil
 	}})
@@ -196,9 +196,9 @@ func TestDialViaHTTPSProxyUsesConfiguredCABundle(t *testing.T) {
 	t.Setenv("ALL_PROXY", "")
 	t.Setenv("NO_PROXY", "")
 	t.Setenv("no_proxy", "")
-	t.Setenv("CAUTEUM_PROXY_AUTH_FILE", "")
-	t.Setenv("CAUTEUM_PROXY_CONNECT_BY_HOSTNAME", "false")
-	t.Setenv("CAUTEUM_PROXY_CA_BUNDLE", caPath)
+	t.Setenv("CAUTEM_PROXY_AUTH_FILE", "")
+	t.Setenv("CAUTEM_PROXY_CONNECT_BY_HOSTNAME", "false")
+	t.Setenv("CAUTEM_PROXY_CA_BUNDLE", caPath)
 	conn, err := DialSSRF(context.Background(), "api.example.com", "443", SSRFOptions{LookupIPAddr: func(context.Context, string) ([]net.IPAddr, error) {
 		return []net.IPAddr{{IP: net.ParseIP("8.8.8.8")}}, nil
 	}})
@@ -232,7 +232,7 @@ func TestDialViaUpstreamProxyUsesValidatedIPAndRejectsHostnameModeWithAllowedIPs
 	}
 	t.Setenv("NO_PROXY", "")
 	t.Setenv("no_proxy", "")
-	for _, key := range []string{"CAUTEUM_PROXY_CONNECT_BY_HOSTNAME", "CAUTEUM_PROXY_AUTH_FILE", "CAUTEUM_PROXY_CA_BUNDLE"} {
+	for _, key := range []string{"CAUTEM_PROXY_CONNECT_BY_HOSTNAME", "CAUTEM_PROXY_AUTH_FILE", "CAUTEM_PROXY_CA_BUNDLE"} {
 		t.Setenv(key, "")
 	}
 	resolver := func(context.Context, string) ([]net.IPAddr, error) {
@@ -249,7 +249,7 @@ func TestDialViaUpstreamProxyUsesValidatedIPAndRejectsHostnameModeWithAllowedIPs
 	if got := <-target; got != "8.8.8.8:443" {
 		t.Fatalf("CONNECT target=%q, want validated IP", got)
 	}
-	t.Setenv("CAUTEUM_PROXY_CONNECT_BY_HOSTNAME", "true")
+	t.Setenv("CAUTEM_PROXY_CONNECT_BY_HOSTNAME", "true")
 	_, err = DialSSRF(context.Background(), "api.example.com", "443", SSRFOptions{AllowedIPs: []string{"8.8.8.8/32"}, LookupIPAddr: resolver})
 	if err == nil || !strings.Contains(err.Error(), "hostname CONNECT") {
 		t.Fatalf("expected hostname mode to fail closed with allowed IPs, got %v", err)

@@ -1,6 +1,6 @@
-# Roadmap — cauteum-proxy
+# Roadmap — cautem-proxy
 
-Status: **v0.1.4** (stable numbered release) · Depends on core `v0.1.4`; slogx `v0.1.2`
+Status: **v0.1.6** (stable numbered release) · Depends on core `v0.1.6`; slogx `v0.1.2`
 
 ## This module
 
@@ -13,4 +13,4 @@ Status: **v0.1.4** (stable numbered release) · Depends on core `v0.1.4`; slogx 
 
 ## Release
 
-Requires cauteum-core `v0.1.0-alpha.1` · tagged after core in the cascade.
+Requires cautem-core `v0.1.0-alpha.1` · tagged after core in the cascade.

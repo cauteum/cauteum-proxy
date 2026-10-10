@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cautem/cauteum-core/policy"
+	"github.com/cautem/cautem-core/policy"
 )
 
 // parseMCPRequest extracts JSON-RPC method and optional tools/call name from an HTTP body.

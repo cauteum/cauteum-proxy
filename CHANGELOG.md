@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v0.1.6] - 2026-10-11
+
+### Changed
+
+- Rename the module, runtime identifiers and project references to the `cautem` namespace.
+
 ## [v0.1.0-beta.2] - 2026-10-10
 
 ### Fixed
@@ -12,8 +18,8 @@
 
 ### Changed
 
-- Complete the Cauteum rebrand and align CI with Go 1.27.2.
-- Resolve `cauteum-core` v0.1.0-beta.2 and `slogx` v0.1.0-beta.1 from published tags.
+- Complete the cautem rebrand and align CI with Go 1.27.2.
+- Resolve `cautem-core` v0.1.0-beta.2 and `slogx` v0.1.0-beta.1 from published tags.
 
 ## [v0.1.0-beta.1] - 2026-10-07
 
@@ -23,7 +29,7 @@
 
 ### Changed
 
-- Use `cauteum-core` v0.1.0-beta.1.
+- Use `cautem-core` v0.1.0-beta.1.
 
 ### Fixed
 
