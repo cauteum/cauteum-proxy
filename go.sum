@@ -2,8 +2,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/NVIDIA/OpenShell/sdk/go v0.0.0-20260909233434-a0814443f19c h1:UPhoAjInjoFIAkCBEFKrFi7mAc6EBrZJl8+bo9D/0Bg=
 github.com/NVIDIA/OpenShell/sdk/go v0.0.0-20260909233434-a0814443f19c/go.mod h1:zdG7v32UKU9U/zMxJ5F/nFRtUOpCUf0R6yu7k+adbxo=
-github.com/cauteum-haven/cauteum-core v0.1.2 h1:9s2++H+kmdvyzkctzLR0rPsTaN4qmL/TA71STop12w4=
-github.com/cauteum-haven/cauteum-core v0.1.2/go.mod h1:v9bvnqrZruMf1QMHw/kK9jynpXXxN2x0/KjXNCTBswo=
+github.com/cauteum-haven/cauteum-core v0.1.4 h1:kbHMI9cHrKassGgHzPApH9Hlqye4161k0y+nW2C2iA8=
+github.com/cauteum-haven/cauteum-core v0.1.4/go.mod h1:v9bvnqrZruMf1QMHw/kK9jynpXXxN2x0/KjXNCTBswo=
 github.com/cauteum-haven/slogx v0.1.2 h1:jCM1DZ5i44EnAEUg/2uV+ygVu3GO+fJezOZZ2nvILW4=
 github.com/cauteum-haven/slogx v0.1.2/go.mod h1:qraaM44p/TiO9pYXFBgCay37eeAB7uKHpXbLW3+kPNg=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
