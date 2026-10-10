@@ -10,12 +10,58 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestUpstreamProxyCONNECTStopsOnContextCancellation(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	accepted := make(chan struct{})
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		close(accepted)
+		_, _ = http.ReadRequest(bufio.NewReader(conn))
+		// The upstream proxy deliberately never answers CONNECT.
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+	proxyURL := &url.URL{Scheme: "http", Host: listener.Addr().String()}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		conn, err := dialViaHTTPProxy(ctx, proxyURL, "api.example.com:443")
+		if conn != nil {
+			_ = conn.Close()
+		}
+		result <- err
+	}()
+	select {
+	case <-accepted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("upstream proxy connection was not established")
+	}
+	cancel()
+	select {
+	case err := <-result:
+		if err == nil {
+			t.Fatal("CONNECT succeeded after cancellation")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("CONNECT did not stop after cancellation")
+	}
+}
 
 func TestDialViaUpstreamProxy(t *testing.T) {
 	// Fake corp proxy: accepts CONNECT and tunnels to a backend.

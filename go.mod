@@ -2,6 +2,8 @@ module github.com/cauteum/cauteum-proxy
 
 go 1.27.0
 
+toolchain go1.27.2
+
 require (
 	github.com/NVIDIA/OpenShell/sdk/go v0.0.0-20260909233434-a0814443f19c
 	github.com/cauteum/cauteum-core v0.1.0-beta.1.0.20261008213715-9b32ff965bef
@@ -21,8 +23,8 @@ require (
 	github.com/lkmavi/saferefl v0.4.0 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
 )

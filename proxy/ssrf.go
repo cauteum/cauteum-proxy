@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Always-blocked ranges (SSRF): never allowed, not even via allowed_ips.
@@ -197,6 +198,20 @@ func dialViaHTTPProxy(ctx context.Context, proxyURL *url.URL, target string) (ne
 	if err != nil {
 		return nil, fmt.Errorf("upstream proxy dial: %w", err)
 	}
+	deadline := time.Now().Add(upstreamDialTimeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("upstream proxy deadline: %w", err)
+	}
+	stopCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopCancel()
+	if err := ctx.Err(); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 	if strings.EqualFold(proxyURL.Scheme, "https") {
 		tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: proxyURL.Hostname()}
 		if caPath := strings.TrimSpace(os.Getenv("CAUTEUM_PROXY_CA_BUNDLE")); caPath != "" {
@@ -261,6 +276,17 @@ func dialViaHTTPProxy(ctx context.Context, proxyURL *url.URL, target string) (ne
 	if resp.StatusCode != http.StatusOK {
 		_ = conn.Close()
 		return nil, fmt.Errorf("upstream proxy CONNECT: %s", resp.Status)
+	}
+	if !stopCancel() {
+		_ = conn.Close()
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("upstream proxy connection canceled")
+	}
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("upstream proxy clear deadline: %w", err)
 	}
 	if br.Buffered() > 0 {
 		return &bufConn{Conn: conn, r: br}, nil

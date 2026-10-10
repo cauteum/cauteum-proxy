@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+## [v0.1.0-beta.2] - 2026-10-10
+
+### Fixed
+
+- Reject malformed egress CA bundles before the proxy starts instead of silently falling back to a different trust configuration.
+- Bound and cancel upstream HTTP proxy CONNECT handshakes.
+- Send the actual HTTP or WebSocket scheme to supervisor middleware.
+
+### Changed
+
+- Complete the Cauteum rebrand and align CI with Go 1.27.2.
+
 ## [v0.1.0-beta.1] - 2026-10-07
 
 ### Added

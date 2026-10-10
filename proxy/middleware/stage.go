@@ -12,6 +12,7 @@ import (
 
 // Request is the inspectable egress request passed to stages.
 type Request struct {
+	Scheme  string            `json:"scheme"`
 	Host    string            `json:"host"`
 	Port    int               `json:"port"`
 	Method  string            `json:"method"`
@@ -36,6 +37,7 @@ type ResponseDecision struct {
 
 type WebSocketRequest struct {
 	SessionID             string
+	Scheme                string
 	Host                  string
 	Port                  int
 	Path                  string

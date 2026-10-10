@@ -354,7 +354,7 @@ func (s *GRPCStage) Evaluate(ctx context.Context, req Request) (Decision, error)
 	result, err := s.client.EvaluateHttpRequest(callCtx, &middlewarev1.HttpRequestEvaluation{
 		Phase:          middlewarev1.SupervisorMiddlewarePhase_SUPERVISOR_MIDDLEWARE_PHASE_PRE_CREDENTIALS,
 		Config:         s.config,
-		Target:         &middlewarev1.HttpRequestTarget{Scheme: "http", Host: req.Host, Port: uint32(req.Port), Method: req.Method, Path: req.Path},
+		Target:         &middlewarev1.HttpRequestTarget{Scheme: req.Scheme, Host: req.Host, Port: uint32(req.Port), Method: req.Method, Path: req.Path},
 		Headers:        headers,
 		Body:           req.Body,
 		MiddlewareName: s.name,
@@ -418,7 +418,7 @@ func (s *grpcWebSocketSession) Preflight(ctx context.Context) (bool, error) {
 	callCtx, cancel := context.WithTimeout(ctx, s.stage.timeout)
 	defer cancel()
 	_ = callCtx
-	target := &middlewarev1.HttpRequestTarget{Scheme: "wss", Host: s.req.Host, Port: uint32(s.req.Port), Method: http.MethodGet, Path: s.req.Path}
+	target := &middlewarev1.HttpRequestTarget{Scheme: s.req.Scheme, Host: s.req.Host, Port: uint32(s.req.Port), Method: http.MethodGet, Path: s.req.Path}
 	err := s.stream.Send(&middlewarev1.WebSocketSessionEvent{Event: &middlewarev1.WebSocketSessionEvent_Preflight{Preflight: &middlewarev1.WebSocketPreflight{SessionId: s.req.SessionID, Phase: middlewarev1.SupervisorMiddlewarePhase_SUPERVISOR_MIDDLEWARE_PHASE_PRE_CREDENTIALS, Target: target, RequestedSubprotocols: append([]string(nil), s.req.RequestedSubprotocols...), MiddlewareName: s.stage.name, Config: s.stage.config}}})
 	if err != nil {
 		return s.fail("websocket preflight send failed")

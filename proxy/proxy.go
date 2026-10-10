@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log/slog"
@@ -55,6 +56,7 @@ type Server struct {
 	// UpstreamTLS overrides the TLS client config used when dialing real backends after terminate.
 	// Tests may set InsecureSkipVerify; production leaves this nil (system roots).
 	UpstreamTLS *tls.Config
+	configErr   error
 	// GatewayToken is the sandbox-scoped supervisor bearer for gateway calls
 	// (proposals). Never exposed to placeholder resolution.
 	GatewayToken string
@@ -92,18 +94,48 @@ func NewServer(eng engine.PolicyEngine, audit io.Writer) *Server {
 	if len(srv.tokenGrants) > 0 {
 		srv.tokenGrantResolver = NewSPIFFETokenGrantResolver()
 	}
-	if caPath := strings.TrimSpace(os.Getenv("CAUTEUM_PROXY_CA_BUNDLE")); caPath != "" {
+	if caPath := strings.TrimSpace(os.Getenv("CAUTEUM_EGRESS_CA_BUNDLE")); caPath != "" {
 		roots, err := x509.SystemCertPool()
 		if err != nil || roots == nil {
-			roots = x509.NewCertPool()
+			srv.configErr = fmt.Errorf("system certificate roots are unavailable")
+		} else {
+			body, readErr := os.ReadFile(caPath)
+			if readErr != nil {
+				srv.configErr = fmt.Errorf("read configured egress CA bundle")
+			} else if len(body) > 1<<20 {
+				srv.configErr = fmt.Errorf("configured egress CA bundle exceeds 1 MiB")
+			} else if err := appendEgressCerts(roots, body); err != nil {
+				srv.configErr = fmt.Errorf("configured egress CA bundle is invalid: %w", err)
+			} else {
+				srv.UpstreamTLS = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}
+			}
 		}
-		body, readErr := os.ReadFile(caPath)
-		if readErr != nil || !roots.AppendCertsFromPEM(body) {
-			roots = x509.NewCertPool()
-		}
-		srv.UpstreamTLS = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}
 	}
 	return srv
+}
+
+func appendEgressCerts(roots *x509.CertPool, bundle []byte) error {
+	remaining := bytes.TrimSpace(bundle)
+	count := 0
+	for len(remaining) > 0 {
+		block, rest := pem.Decode(remaining)
+		if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+			return fmt.Errorf("invalid certificate PEM block")
+		}
+		certificates, err := x509.ParseCertificates(block.Bytes)
+		if err != nil || len(certificates) == 0 {
+			return fmt.Errorf("invalid certificate in PEM bundle")
+		}
+		for _, certificate := range certificates {
+			roots.AddCert(certificate)
+			count++
+		}
+		remaining = bytes.TrimSpace(rest)
+	}
+	if count == 0 {
+		return fmt.Errorf("PEM bundle contains no certificates")
+	}
+	return nil
 }
 
 func (s *Server) logger() *slog.Logger {
@@ -187,6 +219,9 @@ func (s *Server) Handler() http.Handler {
 
 // ListenAndServe listens on addr until ctx is cancelled.
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
+	if s.configErr != nil {
+		return fmt.Errorf("proxy configuration: %w", s.configErr)
+	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		s.logger().Error("proxy listener bind failed", slog.String("op", "proxy.serve"), slog.String("addr", addr), slogx.Err(err))
@@ -197,6 +232,10 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 
 // Serve serves on ln until ctx is cancelled.
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
+	if s.configErr != nil {
+		_ = ln.Close()
+		return fmt.Errorf("proxy configuration: %w", s.configErr)
+	}
 	log := s.logger().With(slog.String("op", "proxy.serve"), slog.String("addr", ln.Addr().String()))
 	srv := &http.Server{
 		Handler:           s.Handler(),
@@ -343,7 +382,7 @@ func (s *Server) handleAbsoluteHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := s.runMiddleware(r.Context(), r, host, port, pathOnly); err != nil {
+	if err := s.runMiddleware(r.Context(), r, "http", host, port, pathOnly); err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte("cauteum-proxy: middleware denied\n"))
 		s.logAudit(auditEvent{
@@ -482,7 +521,7 @@ func (s *Server) runMiddlewareResponse(ctx context.Context, request *http.Reques
 		}
 	}
 	response := &middleware.Response{StatusCode: resp.StatusCode, Headers: resp.Header, Trailers: resp.Trailer, Body: body}
-	err = pipe.RunResponse(ctx, middleware.Request{Host: host, Port: port, Method: request.Method, Path: pathOnly, Headers: reqHeaders}, response)
+	err = pipe.RunResponse(ctx, middleware.Request{Scheme: "http", Host: host, Port: port, Method: request.Method, Path: pathOnly, Headers: reqHeaders}, response)
 	if err != nil {
 		return err
 	}
@@ -494,7 +533,7 @@ func (s *Server) runMiddlewareResponse(ctx context.Context, request *http.Reques
 	return nil
 }
 
-func (s *Server) runMiddleware(ctx context.Context, r *http.Request, host string, port int, pathOnly string) error {
+func (s *Server) runMiddleware(ctx context.Context, r *http.Request, scheme, host string, port int, pathOnly string) error {
 	s.mu.RLock()
 	pipe := s.Middleware
 	s.mu.RUnlock()
@@ -512,7 +551,7 @@ func (s *Server) runMiddleware(ctx context.Context, r *http.Request, host string
 		}
 	}
 	dec, err := pipe.Run(ctx, middleware.Request{
-		Host: host, Port: port, Method: r.Method, Path: pathOnly, Headers: h, Body: body,
+		Scheme: scheme, Host: host, Port: port, Method: r.Method, Path: pathOnly, Headers: h, Body: body,
 	})
 	if err != nil {
 		return err

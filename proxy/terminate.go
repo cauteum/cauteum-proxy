@@ -324,7 +324,7 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 			})
 		}
 
-		if err := s.runMiddleware(req.Context(), req, host, port, pathOnly); err != nil {
+		if err := s.runMiddleware(req.Context(), req, "https", host, port, pathOnly); err != nil {
 			s.logAudit(auditEvent{
 				Action: "deny", Host: host, Port: port, Reason: err.Error(), Allow: false,
 				Method: req.Method, Path: pathOnly, Binary: binary,
@@ -509,7 +509,7 @@ func (s *Server) openWebSocketMiddlewareSessions(ctx context.Context, req *http.
 	if pipe == nil {
 		return nil, nil
 	}
-	return pipe.OpenWebSocketSessions(ctx, middleware.WebSocketRequest{SessionID: fmt.Sprintf("%d", time.Now().UnixNano()), Host: host, Port: port, Path: pathOnly, RequestedSubprotocols: websocketSubprotocols(req.Header)})
+	return pipe.OpenWebSocketSessions(ctx, middleware.WebSocketRequest{SessionID: fmt.Sprintf("%d", time.Now().UnixNano()), Scheme: "wss", Host: host, Port: port, Path: pathOnly, RequestedSubprotocols: websocketSubprotocols(req.Header)})
 }
 
 func websocketSubprotocols(headers http.Header) []string {
