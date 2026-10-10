@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cautem/cauteum-core/engine"
-	"github.com/cautem/cauteum-core/policy"
+	"github.com/cautem/cautem-core/engine"
+	"github.com/cautem/cautem-core/policy"
 )
 
 func TestWatchPolicyReload(t *testing.T) {
@@ -80,7 +80,7 @@ network_policies:
 func TestWatchPolicyReportsAppliedRevision(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.yaml")
-	body := []byte(`# cauteum-policy-revision: 7
+	body := []byte(`# cautem-policy-revision: 7
 version: 1
 network_policies:
   api:
@@ -125,7 +125,7 @@ network_policies:
 func TestWatchPolicyAcknowledgementFailureFailsClosed(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.yaml")
-	body := []byte(`# cauteum-policy-revision: 9
+	body := []byte(`# cautem-policy-revision: 9
 version: 1
 network_policies:
   api:

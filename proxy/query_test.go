@@ -4,8 +4,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/cautem/cauteum-core/engine"
-	"github.com/cautem/cauteum-core/policy"
+	"github.com/cautem/cautem-core/engine"
+	"github.com/cautem/cautem-core/policy"
 )
 
 func TestOpenShellQuerySelectorsDecideEveryRepeatedValue(t *testing.T) {

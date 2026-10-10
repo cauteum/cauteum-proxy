@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cautem/cauteum-core/policy"
+	"github.com/cautem/cautem-core/policy"
 )
 
 const defaultGraphQLMaxBodyBytes = 64 << 10

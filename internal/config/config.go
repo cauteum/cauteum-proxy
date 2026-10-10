@@ -12,11 +12,11 @@ type Config struct {
 	LogLevel   string
 }
 
-// Load reads CAUTEUM_* defaults (CLI flags override at call site).
+// Load reads CAUTEM_* defaults (CLI flags override at call site).
 func Load() Config {
 	return Config{
-		Listen:     strings.TrimSpace(os.Getenv("CAUTEUM_PROXY_LISTEN")),
-		PolicyPath: strings.TrimSpace(os.Getenv("CAUTEUM_PROXY_POLICY")),
-		LogLevel:   strings.TrimSpace(os.Getenv("CAUTEUM_LOG_LEVEL")),
+		Listen:     strings.TrimSpace(os.Getenv("CAUTEM_PROXY_LISTEN")),
+		PolicyPath: strings.TrimSpace(os.Getenv("CAUTEM_PROXY_POLICY")),
+		LogLevel:   strings.TrimSpace(os.Getenv("CAUTEM_LOG_LEVEL")),
 	}
 }

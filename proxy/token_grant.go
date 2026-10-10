@@ -41,7 +41,7 @@ type TokenGrantTarget struct {
 	Path string
 }
 
-const EnvTokenGrants = "CAUTEUM_TOKEN_GRANTS"
+const EnvTokenGrants = "CAUTEM_TOKEN_GRANTS"
 
 func loadTokenGrantsFromEnviron(environ []string) map[string]TokenGrantCredential {
 	for _, entry := range environ {

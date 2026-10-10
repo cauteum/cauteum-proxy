@@ -67,7 +67,7 @@ func (r *SPIFFETokenGrantResolver) ResolveTokenGrant(ctx context.Context, g Toke
 	if jwtAudience == "" {
 		jwtAudience = deriveJWTGrantAudience(g.TokenEndpoint)
 	}
-	socket := firstTokenGrantEnv("OPENSHELL_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET", "CAUTEUM_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET")
+	socket := firstTokenGrantEnv("OPENSHELL_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET", "CAUTEM_PROVIDER_SPIFFE_WORKLOAD_API_SOCKET")
 	if socket == "" {
 		return "", fmt.Errorf("SPIFFE Workload API socket is not configured")
 	}
@@ -133,11 +133,11 @@ func (r *SPIFFETokenGrantResolver) ResolveTokenGrant(ctx context.Context, g Toke
 }
 
 func exchangeAtGateway(ctx context.Context, g TokenGrantCredential, supervisorSVID string) (string, error) {
-	base := firstTokenGrantEnv("CAUTEUM_GATEWAY_GRPC_ENDPOINT", "CAUTEUM_GATEWAY_URL", "OPENSHELL_GATEWAY")
+	base := firstTokenGrantEnv("CAUTEM_GATEWAY_GRPC_ENDPOINT", "CAUTEM_GATEWAY_URL", "OPENSHELL_GATEWAY")
 	if base == "" {
 		return "", fmt.Errorf("gateway URL is not configured")
 	}
-	if firstTokenGrantEnv("CAUTEUM_SANDBOX") == "" || firstTokenGrantEnv("CAUTEUM_SANDBOX_TOKEN") == "" || g.Provider == "" || g.CredentialKey == "" {
+	if firstTokenGrantEnv("CAUTEM_SANDBOX") == "" || firstTokenGrantEnv("CAUTEM_SANDBOX_TOKEN") == "" || g.Provider == "" || g.CredentialKey == "" {
 		return "", fmt.Errorf("sandbox token-grant identity is not configured")
 	}
 	u, err := url.Parse(base)
@@ -145,7 +145,7 @@ func exchangeAtGateway(ctx context.Context, g TokenGrantCredential, supervisorSV
 		return "", fmt.Errorf("gateway URL is invalid")
 	}
 	if u.Port() == "" {
-		if port := firstTokenGrantEnv("CAUTEUM_GATEWAY_GRPC_PORT"); port != "" {
+		if port := firstTokenGrantEnv("CAUTEM_GATEWAY_GRPC_PORT"); port != "" {
 			u.Host = net.JoinHostPort(u.Hostname(), port)
 		}
 	}
@@ -157,7 +157,7 @@ func exchangeAtGateway(ctx context.Context, g TokenGrantCredential, supervisorSV
 		}
 		transport = credentials.NewTLS(tlsConfig)
 	} else if strings.EqualFold(u.Scheme, "http") {
-		if firstTokenGrantEnv("CAUTEUM_GUEST_TLS_CA") != "" || firstTokenGrantEnv("CAUTEUM_GUEST_TLS_CERT") != "" || firstTokenGrantEnv("CAUTEUM_GUEST_TLS_KEY") != "" {
+		if firstTokenGrantEnv("CAUTEM_GUEST_TLS_CA") != "" || firstTokenGrantEnv("CAUTEM_GUEST_TLS_CERT") != "" || firstTokenGrantEnv("CAUTEM_GUEST_TLS_KEY") != "" {
 			return "", fmt.Errorf("guest TLS materials require an https gateway endpoint")
 		}
 		transport = insecure.NewCredentials()
@@ -171,9 +171,9 @@ func exchangeAtGateway(ctx context.Context, g TokenGrantCredential, supervisorSV
 	defer conn.Close()
 	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	callCtx = metadata.AppendToOutgoingContext(callCtx, "authorization", "Bearer "+firstTokenGrantEnv("CAUTEUM_SANDBOX_TOKEN"))
+	callCtx = metadata.AppendToOutgoingContext(callCtx, "authorization", "Bearer "+firstTokenGrantEnv("CAUTEM_SANDBOX_TOKEN"))
 	resp, err := openshellv1.NewOpenShellClient(conn).ExchangeProviderSubjectToken(callCtx, &openshellv1.ExchangeProviderSubjectTokenRequest{
-		SandboxId: firstTokenGrantEnv("CAUTEUM_SANDBOX"), Provider: g.Provider, CredentialKey: g.CredentialKey, SupervisorJwtSvid: supervisorSVID,
+		SandboxId: firstTokenGrantEnv("CAUTEM_SANDBOX"), Provider: g.Provider, CredentialKey: g.CredentialKey, SupervisorJwtSvid: supervisorSVID,
 	})
 	if err != nil || resp.GetAccessToken() == "" {
 		return "", fmt.Errorf("gateway subject-token exchange failed")
@@ -182,9 +182,9 @@ func exchangeAtGateway(ctx context.Context, g TokenGrantCredential, supervisorSV
 }
 
 func tokenGrantTLSConfigFromEnvironment(serverName string) (*tls.Config, error) {
-	caPath := firstTokenGrantEnv("CAUTEUM_GUEST_TLS_CA")
-	certPath := firstTokenGrantEnv("CAUTEUM_GUEST_TLS_CERT")
-	keyPath := firstTokenGrantEnv("CAUTEUM_GUEST_TLS_KEY")
+	caPath := firstTokenGrantEnv("CAUTEM_GUEST_TLS_CA")
+	certPath := firstTokenGrantEnv("CAUTEM_GUEST_TLS_CERT")
+	keyPath := firstTokenGrantEnv("CAUTEM_GUEST_TLS_KEY")
 	if caPath == "" && certPath == "" && keyPath == "" {
 		return &tls.Config{MinVersion: tls.VersionTLS12, ServerName: serverName}, nil
 	}

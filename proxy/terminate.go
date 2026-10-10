@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cautem/cauteum-core/engine"
-	"github.com/cautem/cauteum-core/policy"
-	"github.com/cautem/cauteum-proxy/proxy/middleware"
+	"github.com/cautem/cautem-core/engine"
+	"github.com/cautem/cautem-core/policy"
+	"github.com/cautem/cautem-proxy/proxy/middleware"
 )
 
 const maxRawTunnelLifetime = 30 * time.Minute
@@ -107,7 +107,7 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	}
 	if credentialed {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("cauteum-proxy: credentialed endpoint requires L7 inspection\n"))
+		_, _ = w.Write([]byte("cautem-proxy: credentialed endpoint requires L7 inspection\n"))
 		s.logAudit(auditEvent{Action: "deny", Host: host, Port: port, Reason: "credentialed endpoint requires L7 inspection", Allow: false, Binary: bin})
 		return
 	}
@@ -308,11 +308,11 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 				ProtoMajor: 1,
 				ProtoMinor: 1,
 				Header:     make(http.Header),
-				Body:       io.NopCloser(strings.NewReader("cauteum-proxy: denied\n")),
+				Body:       io.NopCloser(strings.NewReader("cautem-proxy: denied\n")),
 			}
 			resp.Header.Set("Content-Type", "text/plain")
 			resp.Header.Set("Connection", "close")
-			resp.ContentLength = int64(len("cauteum-proxy: denied\n"))
+			resp.ContentLength = int64(len("cautem-proxy: denied\n"))
 			_ = resp.Write(clientTLS)
 			_ = req.Body.Close()
 			return
@@ -329,7 +329,7 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 				Action: "deny", Host: host, Port: port, Reason: err.Error(), Allow: false,
 				Method: req.Method, Path: pathOnly, Binary: binary,
 			})
-			msg := "cauteum-proxy: middleware denied\n"
+			msg := "cautem-proxy: middleware denied\n"
 			resp := &http.Response{
 				StatusCode: http.StatusForbidden,
 				ProtoMajor: 1, ProtoMinor: 1,
@@ -352,7 +352,7 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 		secrets, bindErr := s.resolveTokenGrantPlaceholders(req.Context(), host, port, pathOnly, req, bound, secrets)
 		if bindErr != nil {
 			s.logAudit(auditEvent{Action: "deny", Host: host, Port: port, Reason: "token grant failed", Allow: false, Method: req.Method, Path: pathOnly, Binary: binary})
-			msg := "cauteum-proxy: token grant failed\n"
+			msg := "cautem-proxy: token grant failed\n"
 			resp := &http.Response{StatusCode: http.StatusForbidden, ProtoMajor: 1, ProtoMinor: 1, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(msg))}
 			resp.Header.Set("Connection", "close")
 			_ = resp.Write(clientTLS)
@@ -369,7 +369,7 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 				Action: "finding", Host: host, Port: port, Reason: "credential_endpoint_mismatch", Allow: false,
 				Method: req.Method, Path: pathOnly, Binary: binary,
 			})
-			msg := "cauteum-proxy: credential_endpoint_mismatch\n"
+			msg := "cautem-proxy: credential_endpoint_mismatch\n"
 			resp := &http.Response{
 				StatusCode: http.StatusForbidden,
 				ProtoMajor: 1, ProtoMinor: 1,
@@ -387,7 +387,7 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 				Action: "deny", Host: host, Port: port, Reason: "credential rewrite: " + err.Error(), Allow: false,
 				Method: req.Method, Path: pathOnly, Binary: binary,
 			})
-			msg := "cauteum-proxy: credential rewrite failed\n"
+			msg := "cautem-proxy: credential rewrite failed\n"
 			resp := &http.Response{
 				StatusCode: http.StatusForbidden,
 				ProtoMajor: 1, ProtoMinor: 1,
@@ -428,7 +428,7 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 			wsSessions, err = s.openWebSocketMiddlewareSessions(req.Context(), req, host, port, pathOnly)
 			if err != nil {
 				_ = req.Body.Close()
-				msg := "cauteum-proxy: websocket middleware denied\n"
+				msg := "cautem-proxy: websocket middleware denied\n"
 				_, _ = clientTLS.Write([]byte("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: " + strconv.Itoa(len(msg)) + "\r\nConnection: close\r\n\r\n" + msg))
 				return
 			}
@@ -457,7 +457,7 @@ func (s *Server) mitmHTTPS(client net.Conn, clientBuf *bufio.Reader, backend net
 		if !wantWS || resp.StatusCode != http.StatusSwitchingProtocols {
 			if err := s.runMiddlewareResponse(req.Context(), req, host, port, pathOnly, resp); err != nil {
 				_ = resp.Body.Close()
-				msg := "cauteum-proxy: response middleware denied\n"
+				msg := "cautem-proxy: response middleware denied\n"
 				_, _ = clientTLS.Write([]byte("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: " + strconv.Itoa(len(msg)) + "\r\nConnection: close\r\n\r\n" + msg))
 				return
 			}

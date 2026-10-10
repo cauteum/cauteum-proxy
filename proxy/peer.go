@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cautem/cauteum-core/defaults"
+	"github.com/cautem/cautem-core/defaults"
 )
 
 type ctxKeyConn struct{}

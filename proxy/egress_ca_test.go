@@ -45,7 +45,7 @@ func TestInvalidEgressCABundleFailsBeforeProxyListen(t *testing.T) {
 	if err := os.WriteFile(path, []byte("not a certificate"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CAUTEUM_EGRESS_CA_BUNDLE", path)
+	t.Setenv("CAUTEM_EGRESS_CA_BUNDLE", path)
 	proxy := NewServer(nil, io.Discard)
 	if proxy.UpstreamTLS != nil {
 		t.Fatal("invalid CA bundle configured upstream TLS")

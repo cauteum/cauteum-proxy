@@ -1,4 +1,4 @@
-module github.com/cautem/cauteum-proxy
+module github.com/cautem/cautem-proxy
 
 go 1.27.0
 
@@ -6,7 +6,7 @@ toolchain go1.27.2
 
 require (
 	github.com/NVIDIA/OpenShell/sdk/go v0.0.0-20260909233434-a0814443f19c
-	github.com/cautem/cauteum-core v0.1.5
+	github.com/cautem/cautem-core v0.1.6
 	github.com/cautem/slogx v0.1.3
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/spiffe/go-spiffe/v2 v2.9.0

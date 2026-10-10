@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cautem/cauteum-core/policy"
+	"github.com/cautem/cautem-core/policy"
 )
 
 const defaultJSONRPCMaxBodyBytes = 64 << 10

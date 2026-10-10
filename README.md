@@ -1,32 +1,32 @@
-<h1 align="center">cauteum-proxy</h1>
+<h1 align="center">cautem-proxy</h1>
 
 <p align="center">
   <strong>Egress proxy for sandboxes</strong><br>
   CONNECT + L7 terminate, secret rewrite, policy.local advisor, middleware pipeline.
 </p>
 <p align="center">
-  <a href="https://github.com/cautem/cauteum-proxy/actions/workflows/ci.yml"><img src="https://github.com/cautem/cauteum-proxy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://pkg.go.dev/github.com/cautem/cauteum-proxy"><img src="https://pkg.go.dev/badge/github.com/cautem/cauteum-proxy.svg" alt="Go Reference"></a>
+  <a href="https://github.com/cautem/cautem-proxy/actions/workflows/ci.yml"><img src="https://github.com/cautem/cautem-proxy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pkg.go.dev/github.com/cautem/cautem-proxy"><img src="https://pkg.go.dev/badge/github.com/cautem/cautem-proxy.svg" alt="Go Reference"></a>
   <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/cautem/cauteum-proxy"><img src="https://img.shields.io/badge/Go-1.27+-00ADD8?logo=go" alt="Go Version"></a>
+  <a href="https://github.com/cautem/cautem-proxy"><img src="https://img.shields.io/badge/Go-1.27+-00ADD8?logo=go" alt="Go Version"></a>
 </p>
 <p align="center">
-  <sub>Part of the <a href="https://github.com/cautem">cauteum / cauteum</a> ecosystem</sub>
+  <sub>Part of the <a href="https://github.com/cautem">cautem / cautem</a> ecosystem</sub>
 </p>
 
 ---
 
 ## Overview
 
-The [policy guide](https://cautem.github.io/cauteum-haven.github.io/guides/policy/) covers egress rules; the [security reference](https://cautem.github.io/cauteum-haven.github.io/concepts/security/) records current limits.
+The [policy guide](https://cautem.github.io/sandbox.dev/guides/policy/) covers egress rules; the [security reference](https://cautem.github.io/sandbox.dev/concepts/security/) records current limits.
 
-**cauteum-proxy** is the mandatory egress sidecar for cauteum sandboxes. It enforces policy at L4/L7, rewrites credential placeholders, emits OCSF audit lines, and exposes `policy.local` for in-sandbox proposals.
+**cautem-proxy** is the mandatory egress sidecar for cautem sandboxes. It enforces policy at L4/L7, rewrites credential placeholders, emits OCSF audit lines, and exposes `policy.local` for in-sandbox proposals.
 
 ### Key Features
 
 | Category | Capabilities |
 |----------|--------------|
-| **L4** | CONNECT allowlist from `cauteum-core` engine |
+| **L4** | CONNECT allowlist from `cautem-core` engine |
 | **L7** | TLS terminate for REST / GraphQL / MCP rules |
 | **Secrets** | Placeholder rewrite + gateway secret refresh |
 | **Advisor** | `https://policy.local/v1/{policy,denials,proposals}` |
@@ -38,7 +38,7 @@ The [policy guide](https://cautem.github.io/cauteum-haven.github.io/guides/polic
 
 Use the sibling `go.work` workspace for source builds and run `go test ./...` in this checkout. Published alpha dependencies have not passed a standalone consumer build.
 
-Usually run as the sandbox sidecar (started by `cauteum-driver`), not as a standalone service.
+Usually run as the sandbox sidecar (started by `cautem-driver`), not as a standalone service.
 
 **Requirements:** Go 1.27+
 
@@ -48,7 +48,7 @@ Usually run as the sandbox sidecar (started by `cauteum-driver`), not as a stand
 
 ```bash
 # From the CLI (host-side debug proxy):
-cauteum proxy --listen 127.0.0.1:3128 --policy ./policy.yaml
+cautem proxy --listen 127.0.0.1:3128 --policy ./policy.yaml
 ```
 
 ---
@@ -70,8 +70,8 @@ cauteum proxy --listen 127.0.0.1:3128 --policy ./policy.yaml
 | Roadmap | [ROADMAP.md](./ROADMAP.md) |
 | Organization | [https://github.com/cautem](https://github.com/cautem) |
 | Organization overview | [github.com/cautem](https://github.com/cautem) |
-| pkg.go.dev | [`github.com/cautem/cauteum-proxy`](https://pkg.go.dev/github.com/cautem/cauteum-proxy) |
+| pkg.go.dev | [`github.com/cautem/cautem-proxy`](https://pkg.go.dev/github.com/cautem/cautem-proxy) |
 
 ## License
 
-[Apache-2.0](./LICENSE) © cauteum
+[Apache-2.0](./LICENSE) © cautem

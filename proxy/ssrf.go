@@ -136,7 +136,7 @@ func DialSSRF(ctx context.Context, host, port string, opts SSRFOptions) (net.Con
 	proxyURL, bypass := upstreamProxyURL(host, port, addrs)
 	if proxyURL != nil {
 		targetHost := addrs[0].String()
-		if strings.EqualFold(strings.TrimSpace(os.Getenv("CAUTEUM_PROXY_CONNECT_BY_HOSTNAME")), "true") {
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("CAUTEM_PROXY_CONNECT_BY_HOSTNAME")), "true") {
 			if len(opts.AllowedIPs) > 0 {
 				return nil, fmt.Errorf("ssrf: hostname CONNECT through an upstream proxy is incompatible with allowed_ips")
 			}
@@ -214,7 +214,7 @@ func dialViaHTTPProxy(ctx context.Context, proxyURL *url.URL, target string) (ne
 	}
 	if strings.EqualFold(proxyURL.Scheme, "https") {
 		tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: proxyURL.Hostname()}
-		if caPath := strings.TrimSpace(os.Getenv("CAUTEUM_PROXY_CA_BUNDLE")); caPath != "" {
+		if caPath := strings.TrimSpace(os.Getenv("CAUTEM_PROXY_CA_BUNDLE")); caPath != "" {
 			body, readErr := os.ReadFile(caPath)
 			if readErr != nil {
 				_ = conn.Close()
@@ -248,7 +248,7 @@ func dialViaHTTPProxy(ctx context.Context, proxyURL *url.URL, target string) (ne
 		pass, _ := proxyURL.User.Password()
 		token := base64.StdEncoding.EncodeToString([]byte(proxyURL.User.Username() + ":" + pass))
 		req.Header.Set("Proxy-Authorization", "Basic "+token)
-	} else if authPath := strings.TrimSpace(os.Getenv("CAUTEUM_PROXY_AUTH_FILE")); authPath != "" {
+	} else if authPath := strings.TrimSpace(os.Getenv("CAUTEM_PROXY_AUTH_FILE")); authPath != "" {
 		body, err := os.ReadFile(authPath)
 		if err != nil || len(body) > 64*1024 {
 			_ = conn.Close()
