@@ -1,0 +1,30 @@
+# Codecov configuration (gogpu-style)
+# https://docs.codecov.com/docs/codecovyml-reference
+
+coverage:
+  precision: 2
+  round: down
+  range: "40...100"
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5%
+        informational: true
+    patch:
+      default:
+        target: 60%
+        threshold: 5%
+        informational: true
+
+ignore:
+  - "**/examples/**"
+
+parsers:
+  go:
+    partials_as_hits: false
+
+comment:
+  layout: "header, diff, flags, components"
+  behavior: default
+  require_changes: false
