@@ -18,7 +18,7 @@
 
 ## Overview
 
-The [policy guide](https://cauteum.github.io/guides/policy/) covers egress rules; the [security reference](https://cauteum.github.io/concepts/security/) records current limits.
+The [policy guide](https://cauteum-haven.github.io/guides/policy/) covers egress rules; the [security reference](https://cauteum-haven.github.io/concepts/security/) records current limits.
 
 **cauteum-proxy** is the mandatory egress sidecar for cauteum sandboxes. It enforces policy at L4/L7, rewrites credential placeholders, emits OCSF audit lines, and exposes `policy.local` for in-sandbox proposals.
 
